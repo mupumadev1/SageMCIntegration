@@ -239,7 +239,7 @@ public class service {
         return fetchedObj.isPresent();
     }
     public boolean checkVendorAccount(requestDTO invoiceDto){
-        Apven obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
+        Apven obj = apven_repo.findByBankid(invoiceDto.getCreditAccountId());
         return obj != null;
     }
     public boolean checkVendorAccountHI(requestDTO invoiceDto){
@@ -247,7 +247,7 @@ public class service {
         return obj != null;
     }
     public boolean insertApibh(requestDTO invoiceDto) {
-        Apven obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
+        Apven obj = apven_repo.findByBankid(invoiceDto.getCreditAccountId());
         String vendorId = obj.getVendorid();
         String vendorName = obj.getVendname();
         int month = getMonthYear()[0];

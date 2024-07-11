@@ -84,9 +84,9 @@ public class controller {
                 return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
             }
 
-            if (service.findByAccountId(requestDTO)&&service.checkVendorAccount(requestDTO)) {
-                Apven obj = apven_repo.findByVendorid(requestDTO.getCreditAccountId());
-                requestDTO.setCreditAccountId(obj.getBankid());
+            if (service.findByAccountId(requestDTO)) {
+                //Apven obj = apven_repo.findByBankid(requestDTO.getCreditAccountId());
+                //requestDTO.setCreditAccountId(obj.getBankid());
                 String datestr = requestDTO.getTransactionDate();
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
                 LocalDate date = LocalDate.parse(datestr, formatter);

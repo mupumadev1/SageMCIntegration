@@ -4,5 +4,5 @@ import com.sagemcintegration.model.mssql.ic.ap.Apven;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface Apven_repo extends JpaRepository<Apven,Integer> {
-    Apven findByVendorid(String accId);
+    Apven findByBankid(String accId);
 }
