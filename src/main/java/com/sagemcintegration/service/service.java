@@ -1,11 +1,10 @@
 package com.sagemcintegration.service;
 
+import com.sagemcintegration.dto.infoDTO;
 import com.sagemcintegration.dto.requestDTO;
 import com.sagemcintegration.model.mssql.ic.ap.*;
 import com.sagemcintegration.model.mssql.ic.gl.*;
 import com.sagemcintegration.model.mysql.ProcessedTransactions;
-import com.sagemcintegration.repository.mssql.hi.ap.*;
-import com.sagemcintegration.repository.mssql.hi.gl.*;
 import com.sagemcintegration.repository.mssql.ic.ap.*;
 import com.sagemcintegration.repository.mssql.ic.gl.*;
 import lombok.AllArgsConstructor;
@@ -28,9 +27,7 @@ public class service {
     private final com.sagemcintegration.repository.mssql.hi.ap.HIApibd_repo HIApibd_repo;
     private final com.sagemcintegration.repository.mssql.hi.ap.HIApibs_repo HIApibs_repo;
     private final com.sagemcintegration.repository.mssql.hi.ap.HIApp02_repo HIApp02_repo;
-    private final HIApven_repo HIApven_repo;
-    private final HIGL01repo HIGL01Repo;
-    private final HIGlamf_repo HIGlamf_repo;
+
     private final Glbctl_repo glbctl_repo;
     private final Gljeh_repo gljeh_repo;
     private final Gljed_repo gljed_repo;
@@ -45,15 +42,24 @@ public class service {
     private final Glamf_repo glamf_repo;
 
     public Boolean findByAccountId(requestDTO requestDTO) {
-        Optional<Glamf> fetchedDebitAcc = glamf_repo.findByAcctfmttd(requestDTO.getDebitAccountId());
-        if (fetchedDebitAcc.isPresent() ) {
-            return true;
-        } else {
-            return false;
+        for (infoDTO accounts : requestDTO.getDebits()) {
+            if (Double.parseDouble(accounts.getAmount()) < 0) {
+                Optional<Apven> ven = apven_repo.findByVendorid(accounts.getAccountId());
+                if (ven.isEmpty()) {
+                    return false;
+                }
+            } else {
+                Optional<Glamf> fetchedDebitAcc = glamf_repo.findByAcctfmttd(accounts.getAccountId());
+                if (fetchedDebitAcc.isEmpty()) {
+                    return false;
+                }
+            }
         }
+        return true;
+
     }
 
-    public Boolean insertProcessedTransaction(requestDTO requestDTO, String ipaddress) {
+    public void insertProcessedTransaction(requestDTO requestDTO, String ipaddress) {
         ProcessedTransactions processedTransactions = ProcessedTransactions.builder()
                 .transactionDate(requestDTO.getTransactionDate())
                 .transactionReference(requestDTO.getTransactionReference())
@@ -65,8 +71,6 @@ public class service {
                 .transactionDescription(requestDTO.getTransactionDescription())
                 .build();
         processedTransactions_repo.save(processedTransactions);
-
-        return true;
 
     }
 
@@ -107,55 +111,7 @@ public class service {
         return ++maxId;
     }
 
-    public void updateNextBatchNo(int nextBatchNo) {
-        Optional<Gl01> gl01 = gl01repo.findByOptionid("GL01");
-        if (gl01.isPresent()) {
-            Gl01 gl011 = gl01.get();
-            gl011.setNextbtchno(nextBatchNo);
-            gl01repo.save(gl011);
-        }
-    }
 
-    public int currentDate() {
-        LocalDate date0 = LocalDate.now();
-        String dateString = date0.toString();
-        String cleanedDate = dateString.replaceAll(("-*"), "");
-        return Integer.parseInt(cleanedDate);
-    }
-    public Boolean findBatchDesc(String batchdesc) {
-        Glbctl fetchedDesc = glbctl_repo.findByBtchdesc(batchdesc);
-        if (fetchedDesc != null) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    public Boolean updateGljeh(Gljeh gljeh, int detailCount, requestDTO requestDTO) {
-        BigDecimal initialjrnlCr = gljeh.getJrnlcr();
-        BigDecimal initialjrnlDr = gljeh.getJrnldr();
-        BigDecimal jrnlDr = bigDecimalValue(requestDTO.getDebitAmount()).add(initialjrnlDr);
-        BigDecimal jrnlCr = bigDecimalValue(requestDTO.getCreditAmount()).add(initialjrnlCr);
-        gljeh.setDetailcnt(detailCount);
-        gljeh.setJrnlcr(jrnlCr);
-        gljeh.setJrnldr(jrnlDr);
-        return true;
-    }
-
-    public Boolean updateGlbctl(Glbctl glbctl, requestDTO requestDTO) {
-        BigDecimal initialDebittot = glbctl.getDebittot();
-        BigDecimal initialCredittot = glbctl.getCredittot();
-        BigDecimal debitTot = bigDecimalValue(requestDTO.getDebitAmount()).add(initialDebittot);
-        BigDecimal creditTot = bigDecimalValue(requestDTO.getCreditAmount()).add(initialCredittot);
-        glbctl.setDebittot(debitTot);
-        glbctl.setCredittot(creditTot);
-        return true;
-    }
-
-    public Glbctl findGlbctlByBatchdesc(String batchdesc) {
-        Glbctl entity = glbctl_repo.findByBtchdesc(batchdesc);
-        return entity;
-    }
     public String currentTime() {
         Date date1 = new Date();
         SimpleDateFormat sdf = new SimpleDateFormat("HHmmssSS");
@@ -174,7 +130,7 @@ public class service {
 
     public BigDecimal bigDecimalValue(String amt) {
         double doubleValue = Double.parseDouble(amt);
-        return BigDecimal.valueOf(doubleValue);
+        return BigDecimal.valueOf(doubleValue).abs();
     }
 
     public String validateReference(String ref) {
@@ -183,16 +139,14 @@ public class service {
         }
         return ref;
     }
-    public Gljeh findGljehByBatchid(String batchid) {
-        Gljeh gljeh = gljeh_repo.findByBatchid(batchid);
-        return gljeh;
-    }
-    public int detailCount(String batchid) {
-        int detailCount = gljeh_repo.findDetailCount(batchid);
-        return detailCount;
-    }
 
 
+    public int currentDate() {
+        LocalDate date0 = LocalDate.now();
+        String dateString = date0.toString();
+        String cleanedDate = dateString.replaceAll(("-*"), "");
+        return Integer.parseInt(cleanedDate);
+    }
     public int getAPBatchNumber() {
         int batchNo = app02_repo.findbatchid();
         return ++batchNo;
@@ -209,7 +163,508 @@ public class service {
     public String formattedDate(String date){
         return date.replaceAll("\\-", "");
     }
+    public boolean checkVendorAccount(requestDTO invoiceDto){
+        Optional<Apven> obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
+        return obj.isPresent();
+    }
+    public boolean createInvoice(requestDTO dto){
+        return insertApibc(dto) && insertApibh(dto) && insertApibs(dto) && insertApibd(dto);
+
+    }
+    public String formatInvoiceNumber(String rawInv){
+        String formattedInv = "INV" + rawInv;
+        // Calculate the number of zeros needed to reach 13 characters
+        int requiredLength = 13;
+        int currentLength = formattedInv.length();
+        // If the current length is less than required, pad with zeros
+        if (currentLength < requiredLength) {
+            // Calculate how many zeros are needed
+            int zerosNeeded = requiredLength - currentLength;
+            // Create a string of zeros
+            return formattedInv + "0".repeat(zerosNeeded) // Append zeros at the end
+                    ;
+        } else if (currentLength > requiredLength) {
+            // If the length exceeds, truncate to keep only the last 13 characters
+            return formattedInv.substring(currentLength - requiredLength);
+        } else {
+            // If already 13 characters long, return as is
+            return formattedInv;
+        }
+    }
+
     public boolean insertApibc(requestDTO invoiceDto) {
+       short invcType = 1;
+
+        int batch = getAPBatchNumber();
+        System.out.print(batch);
+        Apibc apibc = Apibc.builder()
+                .cntbtch(batch)
+                .audtdate(currentDate())
+                .audttime(Integer.parseInt(currentTime()))
+                .audtuser("ADMIN")
+                .audtorg("ICLCOM")
+                .datebtch(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
+                .btchdesc(validateReference(invoiceDto.getTransactionDescription()))
+                .cntinvcent(1)
+                .amtentr(BigDecimal.valueOf(Double.parseDouble(invoiceDto.getCreditAmount())))
+                .btchtype((short) 2)
+                .btchstts((short) 1)
+                .invctype(invcType)
+                .cntlstitem(1)
+                .postseqnbr(0)
+                .nbrerrors(0)
+                .dtelstedit(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
+                .swprinted((short) 0)
+                .srceappl("AP")
+                .swict((short) 0)
+                .build();
+        Apibc obj = apibc_repo.save(apibc);
+        Optional<Apibc> fetchedObj = apibc_repo.findById(obj.getCntbtch());
+        return fetchedObj.isPresent();
+    }
+    public boolean insertApibh(requestDTO invoiceDto) {
+        short texttrx = 1;
+        short idtrx = 12;
+        String invprefix= "INV";
+
+        if (Double.parseDouble(invoiceDto.getCreditAmount()) < 0) {
+            texttrx = 3;
+            idtrx =  32;
+            invprefix = "CRN";
+        }
+        Optional<Apven> obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
+        String vendorId = obj.map(Apven::getVendorid).orElse(null);
+        String vendorName = obj.map(Apven::getVendname).orElse(null);
+        int month = getMonthYear()[0];
+        int year = getMonthYear()[1];
+        String period = Integer.toString(month);
+        String fiscyr = Integer.toString(year);
+        int batch = getAPBatchNumber();
+        String vatcode = "VATIN" + invoiceDto.getCurrency();
+        Apibh apibh = Apibh.builder()
+                .apibhPK(ApibhPK.builder()
+                        .cntbtch(batch)
+                        .cntitem(1)
+                        .build())
+                .audtdate(currentDate())
+                .audttime(Integer.parseInt(currentTime()))
+                .audtuser("ADMIN")
+                .audtorg("ICLCOM")
+                .idvend(vendorId)
+                .idinvc(invprefix + invoiceDto.getTransactionReference())
+                .idrmitto("")
+                .texttrx( texttrx)
+                .idtrx(idtrx)
+                .invcstts((short) 0)
+                .ordrnbr("")
+                .ponbr("")
+                .invcdesc(validateReference(invoiceDto.getTransactionDescription()))
+                .swprtinvc((short) 0)
+                .invcapplto("")
+                .idacctset(invoiceDto.getCurrency())
+                .dateinvc(currentDate())
+                .dateasof(currentDate())
+                .fiscyr(fiscyr)
+                .fiscper(period)
+                .codecurn(invoiceDto.getCurrency())
+                .ratetype("SP")
+                .swmanrte((short) 0)
+                .exchratehc(BigDecimal.valueOf(1))
+                .origratehc(BigDecimal.valueOf(1))
+                .termcode("00Days")
+                .swtermovrd((short) 1)
+                .datedue(currentDate())
+                .datedisc(0)
+                .pctdisc(BigDecimal.valueOf(0))
+                .amtdiscavl(BigDecimal.valueOf(0))
+                .lastline(1)
+                .swtaxbl((short) 0)
+                .swcalctx((short) 0)
+                .codetaxgrp(vatcode)
+                .codetax1("VAT"+invoiceDto.getCurrency())
+                .codetax2("")
+                .codetax3("")
+                .codetax4("")
+                .codetax5("")
+                .taxclass1(invoiceDto.getTaxClass())
+                .taxclass2((short) 0)
+                .taxclass3((short) 0)
+                .taxclass4((short) 0)
+                .taxclass5((short) 0)
+                .basetax1(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
+                .basetax2(BigDecimal.valueOf(0))
+                .basetax3(BigDecimal.valueOf(0))
+                .basetax4(BigDecimal.valueOf(0))
+                .basetax5(BigDecimal.valueOf(0))
+                .amttax1(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .amttax2(BigDecimal.valueOf(0))
+                .amttax3(BigDecimal.valueOf(0))
+                .amttax4(BigDecimal.valueOf(0))
+                .amttax5(BigDecimal.valueOf(0))
+                .amt1099(BigDecimal.valueOf(0))
+                .amtdistset(BigDecimal.valueOf(0))
+                .amttaxdist(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .amtinvctot(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtalloctx(BigDecimal.valueOf(0))
+                .cntpaymsch(1)
+                .amttotdist(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtgrosdst(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .idppd("")
+                .textrmit("")
+                .textste1("")
+                .textste2("")
+                .textste3("")
+                .textste4("")
+                .namecity("")
+                .codestte("")
+                .codepstl("")
+                .codectry("")
+                .namectac("")
+                .textphon("")
+                .textfax("")
+                .daterate(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
+                .amtrectax(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .codepayppd(0)
+                .codevndgrp(invoiceDto.getCurrency())
+                .termsdesc("CashonDelivery")
+                .iddistset("")
+                .id1099Clas("")
+                .amttaxtot(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .amtgrostot(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .swtaxincl1((short) 0)
+                .swtaxincl2((short) 0)
+                .swtaxincl3((short) 0)
+                .swtaxincl4((short) 0)
+                .swtaxincl5((short) 0)
+                .amtexptax(BigDecimal.valueOf(0))
+                .amtaxtobe(BigDecimal.valueOf(0))
+                .taxoutbal(BigDecimal.valueOf(0))
+                .codeoper((short) 1)
+                .acctrec1("12140")
+                .acctrec2("")
+                .acctrec3("")
+                .acctrec4("")
+                .acctrec5("")
+                .acctexp1("")
+                .acctexp2("")
+                .acctexp3("")
+                .acctexp4("")
+                .acctexp5("")
+                .drillapp("")
+                .drilltype((short) 0)
+                .drilldwnlk(0)
+                .swjob((short) 0)
+                .amtrecdist(BigDecimal.valueOf(0))
+                .amtexpdist(BigDecimal.valueOf(0))
+                .errbatch(0)
+                .errentry(0)
+                .email("")
+                .ctacphone("")
+                .ctacfax("")
+                .ctacemail("")
+                .amtppd(BigDecimal.valueOf(0))
+                .idstdinvc("")
+                .dateprcs(0)
+                .amtdsbwtax(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtdsbntax(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
+                .amtdscbase(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .swrtginvc((short) 0)
+                .rtgapplyto("")
+                .swrtg((short) 0)
+                .rtgamt(BigDecimal.valueOf(0))
+                .rtgpercent(BigDecimal.valueOf(0))
+                .rtgdays((short) 0)
+                .rtgdatedue(0)
+                .rtgterms("")
+                .swrtgddtov((short) 0)
+                .swrtgamtov((short) 0)
+                .swrtgrate((short) 0)
+                .swtxbsectl((short) 0)
+                .values(0)
+                .origcomp("")
+                .detailcnt(invoiceDto.getDebits().toArray().length)
+                .srceappl("AP")
+                .swhold((short) 0)
+                .apversion("67A")
+                .taxversion(1)
+                .swtxrtgrpt((short) 0)
+                .codecurnrc(invoiceDto.getCurrency())
+                .swtxctlrc((short) 0)
+                .raterc(BigDecimal.valueOf(1))
+                .ratetyperc("SP")
+                .ratedaterc(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
+                .rateoprc((short) 1)
+                .swraterc((short) 0)
+                .txamt1Rc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .txamt2Rc(BigDecimal.valueOf(0))
+                .txamt3Rc(BigDecimal.valueOf(0))
+                .txamt4Rc(BigDecimal.valueOf(0))
+                .txamt5Rc(BigDecimal.valueOf(0))
+                .txtotrc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .txallrc(BigDecimal.valueOf(0))
+                .txexprc(BigDecimal.valueOf(0))
+                .txrecrc(BigDecimal.valueOf(0))
+                .txbsert1Tc(BigDecimal.valueOf(0))
+                .txbsert2Tc(BigDecimal.valueOf(0))
+                .txbsert3Tc(BigDecimal.valueOf(0))
+                .txbsert4Tc(BigDecimal.valueOf(0))
+                .txbsert5Tc(BigDecimal.valueOf(0))
+                .txamtrt1Tc(BigDecimal.valueOf(0))
+                .txamtrt2Tc(BigDecimal.valueOf(0))
+                .txamtrt3Tc(BigDecimal.valueOf(0))
+                .txamtrt4Tc(BigDecimal.valueOf(0))
+                .txamtrt5Tc(BigDecimal.valueOf(0))
+                .txbse1Hc(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
+                .txbse2Hc(BigDecimal.valueOf(0))
+                .txbse3Hc(BigDecimal.valueOf(0))
+                .txbse4Hc(BigDecimal.valueOf(0))
+                .txbse5Hc(BigDecimal.valueOf(0))
+                .txamt1Hc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .txamt2Hc(BigDecimal.valueOf(0))
+                .txamt3Hc(BigDecimal.valueOf(0))
+                .txamt4Hc(BigDecimal.valueOf(0))
+                .txamt5Hc(BigDecimal.valueOf(0))
+                .amtgroshc(BigDecimal.valueOf(1000))
+                .rtgamthc(BigDecimal.valueOf(0))
+                .amtdischc(BigDecimal.valueOf(0))
+                .amt1099Hc(BigDecimal.valueOf(0))
+                .amtppdhc(BigDecimal.valueOf(0))
+                .amtduetc(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .textven(vendorName)
+                .enteredby("ADMIN")
+                .datebus(currentDate())
+                .idn("")
+                .amtwht1Tc(BigDecimal.valueOf(0))
+                .amtwht2Tc(BigDecimal.valueOf(0))
+                .amtwht3Tc(BigDecimal.valueOf(0))
+                .amtwht4Tc(BigDecimal.valueOf(0))
+                .amtwht5Tc(BigDecimal.valueOf(0))
+                .amtcxbs1Tc(BigDecimal.valueOf(0))
+                .amtcxbs2Tc(BigDecimal.valueOf(0))
+                .amtcxbs3Tc(BigDecimal.valueOf(0))
+                .amtcxbs4Tc(BigDecimal.valueOf(0))
+                .amtcxbs5Tc(BigDecimal.valueOf(0))
+                .amtcxtx1Tc(BigDecimal.valueOf(0))
+                .amtcxtx2Tc(BigDecimal.valueOf(0))
+                .amtcxtx3Tc(BigDecimal.valueOf(0))
+                .amtcxtx4Tc(BigDecimal.valueOf(0))
+                .amtcxtx5Tc(BigDecimal.valueOf(0))
+                .build();
+        apibh_repo.save(apibh);
+        return true;
+    }
+    public boolean insertApibd(requestDTO invoiceDto) {
+        int cntline = 20;
+        int batch = getAPBatchNumber();
+        for (infoDTO dto : invoiceDto.getDebits()) {
+
+            Apibd apibd = Apibd.builder()
+                    .apibdPK(ApibdPK.builder()
+                            .cntbtch(batch)
+                            .cntitem(1)
+                            .cntline(cntline)
+                            .build())
+                    .audtdate(currentDate())
+                    .audttime(Integer.parseInt(currentTime()))
+                    .audtorg("ADMIN")
+                    .audtuser("ICLCOM")
+                    .iddist("")
+                    .textdesc(validateReference(invoiceDto.getTransactionDescription()))
+                    .swmanldist((short) 0)
+                    .amttottax(BigDecimal.valueOf(0))
+                    .swmanltx((short) 0)
+                    .basetax1(bigDecimalValue(dto.getAmount()))
+                    .basetax2(BigDecimal.valueOf(0))
+                    .basetax3(BigDecimal.valueOf(0))
+                    .basetax4(BigDecimal.valueOf(0))
+                    .basetax5(BigDecimal.valueOf(0))
+                    .taxclass1((short) 1)
+                    .taxclass2((short) 0)
+                    .taxclass3((short) 0)
+                    .taxclass4((short) 0)
+                    .taxclass5((short) 0)
+                    .swtaxincl1((short) 0)
+                    .swtaxincl2((short) 0)
+                    .swtaxincl3((short) 0)
+                    .swtaxincl4((short) 0)
+                    .swtaxincl5((short) 0)
+                    .ratetax1(bigDecimalValue(dto.getTaxRate()))
+                    .ratetax2(BigDecimal.valueOf(0))
+                    .ratetax3(BigDecimal.valueOf(0))
+                    .ratetax4(BigDecimal.valueOf(0))
+                    .ratetax5(BigDecimal.valueOf(0))
+                    .amttax1(bigDecimalValue(dto.getTaxAmount()))
+                    .amttax2(BigDecimal.valueOf(0))
+                    .amttax3(BigDecimal.valueOf(0))
+                    .amttax4(BigDecimal.valueOf(0))
+                    .amttax5(BigDecimal.valueOf(0))
+                    .idglacct(dto.getAccountId())
+                    .idaccttax(dto.getAccountId())
+                    .id1099Clas("")
+                    .amtdist(bigDecimalValue(dto.getTotalAmount()))
+                    .amtdistnet(bigDecimalValue(dto.getTotalAmount()))
+                    .amtincltax(BigDecimal.valueOf(0))
+                    .amtgldist(bigDecimalValue(dto.getTotalAmount()))
+                    .amttaxrec1(bigDecimalValue(dto.getTaxAmount()))
+                    .amttaxrec2(BigDecimal.valueOf(0))
+                    .amttaxrec3(BigDecimal.valueOf(0))
+                    .amttaxrec4(BigDecimal.valueOf(0))
+                    .amttaxrec5(BigDecimal.valueOf(0))
+                    .amttaxexp1(BigDecimal.valueOf(0))
+                    .amttaxexp2(BigDecimal.valueOf(0))
+                    .amttaxexp3(BigDecimal.valueOf(0))
+                    .amttaxexp4(BigDecimal.valueOf(0))
+                    .amttaxexp5(BigDecimal.valueOf(0))
+                    .amttaxtobe(BigDecimal.valueOf(0))
+                    .contract("")
+                    .project("")
+                    .category("")
+                    .resource("")
+                    .transnbr(0)
+                    .costclass((short) 0)
+                    .billtype((short) 0)
+                    .iditem("")
+                    .unitmeas("")
+                    .qtyinvc(BigDecimal.valueOf(0))
+                    .amtcost(BigDecimal.valueOf(1))
+                    .billdate(0)
+                    .billrate(BigDecimal.valueOf(0))
+                    .billcurn(String.valueOf(0))
+                    .swibt((short) 0)
+                    .swdiscabl((short) 0)
+                    .ocntline(0)
+                    .rtgamt(BigDecimal.valueOf(0))
+                    .rtgpercent(BigDecimal.valueOf(0))
+                    .rtgdays((short) 0)
+                    .rtgdatedue(0)
+                    .swrtgddtov((short) 0)
+                    .swrtgamtov((short) 0)
+                    .values(0)
+                    .descomp("")
+                    .route((short) 0)
+                    .rtgdisttc(BigDecimal.valueOf(0))
+                    .rtginvdist(BigDecimal.valueOf(0))
+                    .txamt1Rc(bigDecimalValue(dto.getTaxAmount()))
+                    .txamt2Rc(BigDecimal.valueOf(0))
+                    .txamt3Rc(BigDecimal.valueOf(0))
+                    .txamt4Rc(BigDecimal.valueOf(0))
+                    .txamt5Rc(BigDecimal.valueOf(0))
+                    .txtotrc(bigDecimalValue(dto.getTaxAmount()))
+                    .txallrc(BigDecimal.valueOf(0))
+                    .txexp1Rc(BigDecimal.valueOf(0))
+                    .txexp2Rc(BigDecimal.valueOf(0))
+                    .txexp3Rc(BigDecimal.valueOf(0))
+                    .txexp4Rc(BigDecimal.valueOf(0))
+                    .txexp5Rc(BigDecimal.valueOf(0))
+                    .txrec1Rc(bigDecimalValue(dto.getTaxAmount()))
+                    .txrec2Rc(BigDecimal.valueOf(0))
+                    .txrec3Rc(BigDecimal.valueOf(0))
+                    .txrec4Rc(BigDecimal.valueOf(0))
+                    .txrec5Rc(BigDecimal.valueOf(0))
+                    .txbsert1Tc(BigDecimal.valueOf(0))
+                    .txbsert2Tc(BigDecimal.valueOf(0))
+                    .txbsert3Tc(BigDecimal.valueOf(0))
+                    .txbsert4Tc(BigDecimal.valueOf(0))
+                    .txbsert5Tc(BigDecimal.valueOf(0))
+                    .txamtrt1Tc(BigDecimal.valueOf(0))
+                    .txamtrt2Tc(BigDecimal.valueOf(0))
+                    .txamtrt3Tc(BigDecimal.valueOf(0))
+                    .txamtrt4Tc(BigDecimal.valueOf(0))
+                    .txamtrt5Tc(BigDecimal.valueOf(0))
+                    .txbse1Hc(bigDecimalValue(dto.getAmount()))
+                    .txbse2Hc(BigDecimal.valueOf(0))
+                    .txbse3Hc(BigDecimal.valueOf(0))
+                    .txbse4Hc(BigDecimal.valueOf(0))
+                    .txbse5Hc(BigDecimal.valueOf(0))
+                    .txamt1Hc(bigDecimalValue(dto.getTaxAmount()))
+                    .txamt2Hc(BigDecimal.valueOf(0))
+                    .txamt3Hc(BigDecimal.valueOf(0))
+                    .txamt4Hc(BigDecimal.valueOf(0))
+                    .txamt5Hc(BigDecimal.valueOf(0))
+                    .txamtrt1Hc(BigDecimal.valueOf(0))
+                    .txamtrt2Hc(BigDecimal.valueOf(0))
+                    .txamtrt3Hc(BigDecimal.valueOf(0))
+                    .txamtrt4Hc(BigDecimal.valueOf(0))
+                    .txamtrt5Hc(BigDecimal.valueOf(0))
+                    .txrec1Hc(bigDecimalValue(dto.getTaxAmount()))
+                    .txrec2Hc(BigDecimal.valueOf(0))
+                    .txrec3Hc(BigDecimal.valueOf(0))
+                    .txrec4Hc(BigDecimal.valueOf(0))
+                    .txrec5Hc(BigDecimal.valueOf(0))
+                    .txexp1Hc(BigDecimal.valueOf(0))
+                    .txexp2Hc(BigDecimal.valueOf(0))
+                    .txexp3Hc(BigDecimal.valueOf(0))
+                    .txexp4Hc(BigDecimal.valueOf(0))
+                    .txexp5Hc(BigDecimal.valueOf(0))
+                    .txallhc(BigDecimal.valueOf(0))
+                    .txall1Hc(BigDecimal.valueOf(0))
+                    .txall2Hc(BigDecimal.valueOf(0))
+                    .txall3Hc(BigDecimal.valueOf(0))
+                    .txall4Hc(BigDecimal.valueOf(0))
+                    .txall5Hc(BigDecimal.valueOf(0))
+                    .txall1Tc(BigDecimal.valueOf(0))
+                    .txall2Tc(BigDecimal.valueOf(0))
+                    .txall3Tc(BigDecimal.valueOf(0))
+                    .txall4Tc(BigDecimal.valueOf(0))
+                    .txall5Tc(BigDecimal.valueOf(0))
+                    .amtcosthc(BigDecimal.valueOf(0))
+                    .amtdisthc(bigDecimalValue(dto.getAmount()))
+                    .distnethc(bigDecimalValue(dto.getAmount()))
+                    .rtgamthc(BigDecimal.valueOf(0))
+                    .txallrthc(BigDecimal.valueOf(0))
+                    .txallrttc(BigDecimal.valueOf(0))
+                    .txexprthc(BigDecimal.valueOf(0))
+                    .txexprttc(BigDecimal.valueOf(0))
+                    .swfas((short) 0)
+                    .amtwht1Tc(BigDecimal.valueOf(0))
+                    .amtwht2Tc(BigDecimal.valueOf(0))
+                    .amtwht3Tc(BigDecimal.valueOf(0))
+                    .amtwht4Tc(BigDecimal.valueOf(0))
+                    .amtwht5Tc(BigDecimal.valueOf(0))
+                    .amtcxtx1Tc(BigDecimal.valueOf(0))
+                    .amtcxtx2Tc(BigDecimal.valueOf(0))
+                    .amtcxtx3Tc(BigDecimal.valueOf(0))
+                    .amtcxtx4Tc(BigDecimal.valueOf(0))
+                    .amtcxtx5Tc(BigDecimal.valueOf(0))
+                    .swcaxable1((short) 0)
+                    .swcaxable2((short) 0)
+                    .swcaxable3((short) 0)
+                    .swcaxable4((short) 0)
+                    .swcaxable5((short) 0)
+                    .build();
+            apibd_repo.save(apibd);
+            cntline +=10;
+        }
+        return true;
+    }
+    public boolean insertApibs(requestDTO invoiceDto) {
+
+        int batch = getAPBatchNumber();
+        Apibs apibs = Apibs.builder()
+                .apibsPK(ApibsPK.builder()
+                        .cntbtch(batch)
+                        .cntpaym(1)
+                        .cntitem(1)
+                        .build())
+                .audtdate(currentDate())
+                .audttime(Integer.parseInt(currentTime()))
+                .audtuser("ADMIN")
+                .audtorg("ICLCOM")
+                .datedue(currentDate())
+                .amtdue(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .datedisc(0)
+                .amtdisc(BigDecimal.valueOf(0))
+                .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtdischc(BigDecimal.valueOf(0))
+                .build();
+        apibs_repo.save(apibs);
+
+        return true;
+    }
+
+
+    public boolean updateApibc(requestDTO invoiceDto) {
         int batch = getAPBatchNumber();
 
         System.out.print(batch);
@@ -238,18 +693,10 @@ public class service {
         Optional<Apibc> fetchedObj = apibc_repo.findById(obj.getCntbtch());
         return fetchedObj.isPresent();
     }
-    public boolean checkVendorAccount(requestDTO invoiceDto){
-        Apven obj = apven_repo.findByBankid(invoiceDto.getCreditAccountId());
-        return obj != null;
-    }
-    public boolean checkVendorAccountHI(requestDTO invoiceDto){
-        com.sagemcintegration.model.mssql.hi.ap.Apven obj = HIApven_repo.findByBankid(invoiceDto.getCreditAccountId());
-        return obj != null;
-    }
-    public boolean insertApibh(requestDTO invoiceDto) {
-        Apven obj = apven_repo.findByBankid(invoiceDto.getCreditAccountId());
-        String vendorId = obj.getVendorid();
-        String vendorName = obj.getVendname();
+    public boolean updateApibh(requestDTO invoiceDto) {
+        Optional<Apven> obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
+        String vendorId = obj.map(Apven::getVendorid).orElse(null);
+        String vendorName = obj.map(Apven::getVendname).orElse(null);
         int month = getMonthYear()[0];
         int year = getMonthYear()[1];
         String period = Integer.toString(month);
@@ -355,7 +802,7 @@ public class service {
                 .amtaxtobe(BigDecimal.valueOf(0))
                 .taxoutbal(BigDecimal.valueOf(0))
                 .codeoper((short) 1)
-                .acctrec1("20210240")
+                .acctrec1("12140")
                 .acctrec2("")
                 .acctrec3("")
                 .acctrec4("")
@@ -469,7 +916,7 @@ public class service {
         apibh_repo.save(apibh);
         return true;
     }
-    public boolean insertApibd(requestDTO invoiceDto) {
+    public boolean updateApibd(requestDTO invoiceDto) {
         int batch = getAPBatchNumber();
         Apibd apibd = Apibd.builder()
                 .apibdPK(ApibdPK.builder()
@@ -511,8 +958,8 @@ public class service {
                 .amttax3(BigDecimal.valueOf(0))
                 .amttax4(BigDecimal.valueOf(0))
                 .amttax5(BigDecimal.valueOf(0))
-                .idglacct(invoiceDto.getCreditAccountId())
-                .idaccttax(invoiceDto.getCreditAccountId())
+                .idglacct(invoiceDto.getDebitAccountId())
+                .idaccttax(invoiceDto.getDebitAccountId())
                 .id1099Clas("")
                 .amtdist(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .amtdistnet(bigDecimalValue(invoiceDto.getCreditAmount()))
@@ -649,7 +1096,7 @@ public class service {
 
         return true;
     }
-    public boolean insertApibs(requestDTO invoiceDto) {
+    public boolean updateApibs(requestDTO invoiceDto) {
 
         int batch = getAPBatchNumber();
         Apibs apibs = Apibs.builder()
@@ -673,9 +1120,14 @@ public class service {
 
         return true;
     }
+    public boolean updateInvoice(requestDTO dto){
 
-
-    public Boolean insertGjbctl(requestDTO requestDTO, String batchid, String batchdesc) {
+        return updateApibs(dto)&&updateApibc(dto)&&updateApibh(dto)&&updateApibd(dto);
+    }
+    public Optional<Glbctl> checkJournalDuplicates(String desc){
+        return glbctl_repo.findByBtchdescAndBatchstat(desc,"1");
+    }
+    public boolean insertGjbctl(requestDTO requestDTO, String batchid, String batchdesc) {
         int date = currentDate();
         String batch = batchIDChecker(batchid);
         String time = currentTime();
@@ -708,7 +1160,7 @@ public class service {
         return true;
     }
 
-    public Boolean insertGljeh(requestDTO requestDTO, String batchid, String batchNum) {
+    public boolean insertGljeh(requestDTO requestDTO, String batchid, String batchNum) {
         String batch = batchIDChecker(batchid);
         int date = currentDate();
         String time = currentTime();
@@ -744,30 +1196,30 @@ public class service {
                 .errbatch(0)
                 .errentry(0)
                 .origcomp("")
-                .detailcnt(2)
+                .detailcnt(requestDTO.getDebits().toArray().length + requestDTO.getCredits().toArray().length)
                 .enteredby("ADMIN")
                 .docdate(date)
                 .codetaxgrp("")
                 .classtype((short) 0)
                 .swmantx((short) 0)
                 .custvend("")
-                .doctype(Short.parseShort("0"))
+                .doctype((short)0)
                 .docnumber("")
                 .taxauth1("")
                 .taxauth2("")
                 .taxauth3("")
                 .taxauth4("")
                 .taxauth5("")
-                .taxvclss1(Short.parseShort("0"))
-                .taxvclss2(Short.parseShort("0"))
-                .taxvclss3(Short.parseShort("0"))
-                .taxvclss4(Short.parseShort("0"))
-                .taxvclss5(Short.parseShort("0"))
-                .taxiclss1(Short.parseShort("0"))
-                .taxiclss2(Short.parseShort("0"))
-                .taxiclss3(Short.parseShort("0"))
-                .taxiclss4(Short.parseShort("0"))
-                .taxiclss5(Short.parseShort("0"))
+                .taxvclss1((short)0)
+                .taxvclss2((short)0)
+                .taxvclss3((short)0)
+                .taxvclss4((short)0)
+                .taxvclss5((short)0)
+                .taxiclss1((short)0)
+                .taxiclss2((short)0)
+                .taxiclss3((short)0)
+                .taxiclss4((short)0)
+                .taxiclss5((short)0)
                 .basetax1(BigDecimal.valueOf(0))
                 .basetax2(BigDecimal.valueOf(0))
                 .basetax3(BigDecimal.valueOf(0))
@@ -865,88 +1317,182 @@ public class service {
         return true;
 
     }
+public String getBatchNextEntry(String batchid){
+    String lastBatchEntry= gljeh_repo.findBatchEntry(batchid);
+    String numericPart = lastBatchEntry.replaceAll("\\D", "");
+    int numericValue = Integer.parseInt(numericPart);
+    numericValue++; // Increment the numeric value
+
+    // Format the new batch entry string
+    return String.format("%04d", numericValue);
+
+}
+
     @Transactional
-    public Boolean insertGljed(requestDTO requestDTO, String batchid, String transactionNumber1,String transactionNumber2) {
+    public boolean insertGljed(requestDTO requestDTO, String batchid, String btchentry) {
+        //String transactionNumber1 = generateTransactionNumber(1)[0];
+        //String transactionNumber2 = generateTransactionNumber(1)[1];
         String batch = batchIDChecker(batchid);
+        int baseTransactionNumber1 = 20;
+        int baseTransactionNumber2 = 40;
 
         int date = currentDate();
         String time = currentTime();
+        for (infoDTO dto: requestDTO.getCredits()){
+            String transactionNumber2 = String.format("%010d", baseTransactionNumber2);
+            Gljed gljed = Gljed.builder()
+                    .gljedPK(GljedPK.builder()
+                            .batchnbr(batch)
+                            .journalid(btchentry)
+                            .transnbr(transactionNumber2)
+                            .build())
+                    .audtdate(date)
+                    .audttime(Integer.parseInt(time))
+                    .audtuser("ADMIN")
+                    .audtorg("ICLCOM")
+                    .acctid(dto.getAccountId())
+                    .companyid("ICLCOM")
+                    .transamt(bigDecimalValue(dto.getAmount()).negate())
+                    .transqty(BigDecimal.valueOf(0))
+                    .scurndec("2")
+                    .scurnamt(bigDecimalValue(dto.getAmount()).negate())
+                    .hcurncode("ZMW")
+                    .ratetype("SP")
+                    .scurncode("ZMW")
+                    .ratedate(date)
+                    .convrate(BigDecimal.valueOf(1))
+                    .ratespread(BigDecimal.valueOf(0))
+                    .datemtchcd("3")
+                    .rateoper("1")
+                    .transdesc(validateReference(requestDTO.getTransactionDescription()))
+                    .transref(requestDTO.getTransactionReference())
+                    .transdate(date)
+                    .srceldgr("GL")
+                    .srcetype("JE")
+                    .values(0)
+                    .descomp("")
+                    .route((short) 0)
+                    .taxauth("")
+                    .txaccttype((short) 0)
+                    .build();
+            gljed_repo.save(gljed);
+            baseTransactionNumber2 += 20;
+        }
+        for (infoDTO dto: requestDTO.getDebits()) {
+            String transactionNumber1 = String.format("%010d", baseTransactionNumber1);
+            Gljed gljed2 = Gljed.builder()
+                    .gljedPK(GljedPK.builder()
+                            .batchnbr(batch)
+                            .journalid(btchentry)
+                            .transnbr(transactionNumber1)
+                            .build())
+                    .audtdate(date)
+                    .audttime(Integer.parseInt(time))
+                    .audtuser("ADMIN")
+                    .audtorg("ICLCOM")
+                    .acctid(dto.getAccountId())
+                    .companyid("ICLCOM")
+                    .transamt(bigDecimalValue(dto.getAmount()))
+                    .transqty(BigDecimal.valueOf(0))
+                    .scurndec("2")
+                    .scurnamt(bigDecimalValue(dto.getAmount()))
+                    .hcurncode("ZMW")
+                    .ratetype("SP")
+                    .scurncode("ZMW")
+                    .ratedate(date)
+                    .convrate(BigDecimal.valueOf(1))
+                    .ratespread(BigDecimal.valueOf(0))
+                    .datemtchcd("3")
+                    .rateoper("1")
+                    .transdesc(validateReference(requestDTO.getTransactionDescription()))
+                    .transref(requestDTO.getTransactionReference())
+                    .transdate(date)
+                    .srceldgr("GL")
+                    .srcetype("JE")
+                    .values(0)
+                    .descomp("")
+                    .route((short) 0)
+                    .taxauth("")
+                    .txaccttype((short) 0)
+                    .build();
+            gljed_repo.save(gljed2);
+            baseTransactionNumber1 += 20;
+        }
 
-        Gljed gljed = Gljed.builder()
-                .gljedPK(GljedPK.builder()
-                        .batchnbr(batch)
-                        .journalid("00001")
-                        .transnbr(transactionNumber2)
-                        .build())
-                .audtdate(date)
-                .audttime(Integer.parseInt(time))
-                .audtuser("ADMIN")
-                .audtorg("ICLCOM")
-                .acctid(requestDTO.getCreditAccountId())
-                .companyid("ICLCOM")
-                .transamt(bigDecimalValue(requestDTO.getCreditAmount()).negate())
-                .transqty(BigDecimal.valueOf(0))
-                .scurndec("2")
-                .scurnamt(bigDecimalValue(requestDTO.getCreditAmount()).negate())
-                .hcurncode("ZMW")
-                .ratetype("SP")
-                .scurncode("ZMW")
-                .ratedate(date)
-                .convrate(BigDecimal.valueOf(1))
-                .ratespread(BigDecimal.valueOf(0))
-                .datemtchcd("3")
-                .rateoper("1")
-                .transdesc(validateReference(requestDTO.getTransactionDescription()))
-                .transref(requestDTO.getTransactionReference())
-                .transdate(date)
-                .srceldgr("GL")
-                .srcetype("JE")
-                .values(0)
-                .descomp("")
-                .route((short) 0)
-                .taxauth("")
-                .txaccttype((short) 0)
-                .build();
-        Gljed gljed2 = Gljed.builder()
-                .gljedPK(GljedPK.builder()
-                        .batchnbr(batch)
-                        .journalid("00001")
-                        .transnbr(transactionNumber1)
-                        .build())
-                .audtdate(date)
-                .audttime(Integer.parseInt(time))
-                .audtuser("ADMIN")
-                .audtorg("ICLCOM")
-                .acctid(requestDTO.getDebitAccountId())
-                .companyid("ICLCOM")
-                .transamt(bigDecimalValue(requestDTO.getDebitAmount()))
-                .transqty(BigDecimal.valueOf(0))
-                .scurndec("2")
-                .scurnamt(bigDecimalValue(requestDTO.getDebitAmount()))
-                .hcurncode("ZMW")
-                .ratetype("SP")
-                .scurncode("ZMW")
-                .ratedate(date)
-                .convrate(BigDecimal.valueOf(1))
-                .ratespread(BigDecimal.valueOf(0))
-                .datemtchcd("3")
-                .rateoper("1")
-                .transdesc(validateReference(requestDTO.getTransactionDescription()))
-                .transref(requestDTO.getTransactionReference())
-                .transdate(date)
-                .srceldgr("GL")
-                .srcetype("JE")
-                .values(0)
-                .descomp("")
-                .route((short) 0)
-                .taxauth("")
-                .txaccttype((short) 0)
-                .build();
-        gljed_repo.save(gljed2);
-        gljed_repo.save(gljed);
+
         return true;
 
 
+    }
+    public Boolean updateGljeh(Gljeh gljeh, int detailCount, requestDTO requestDTO) {
+        BigDecimal initialjrnlCr = gljeh.getJrnlcr();
+        BigDecimal initialjrnlDr = gljeh.getJrnldr();
+        BigDecimal jrnlDr = bigDecimalValue(requestDTO.getDebitAmount()).add(initialjrnlDr);
+        BigDecimal jrnlCr = bigDecimalValue(requestDTO.getCreditAmount()).add(initialjrnlCr);
+        gljeh.setDetailcnt(detailCount);
+        gljeh.setJrnlcr(jrnlCr);
+        gljeh.setJrnldr(jrnlDr);
+        return true;
+    }
+
+    public Boolean updateGlbctl(Glbctl glbctl, requestDTO requestDTO) {
+        BigDecimal initialDebittot = glbctl.getDebittot();
+        BigDecimal initialCredittot = glbctl.getCredittot();
+        BigDecimal debitTot = bigDecimalValue(requestDTO.getDebitAmount()).add(initialDebittot);
+        BigDecimal creditTot = bigDecimalValue(requestDTO.getCreditAmount()).add(initialCredittot);
+        glbctl.setDebittot(debitTot);
+        glbctl.setCredittot(creditTot);
+        return true;
+    }
+    public  boolean checkJournalDetailsDuplicates(String journalHeader) {
+        return gljed_repo.findByTransref(journalHeader).isPresent();
+    }
+    public void updateNextBatchNo(String todaysBatch) {
+        String btch = todaysBatch.replaceAll("^0+(?!$)", "");
+        int intBatch = Integer.parseInt(btch);
+        Optional<Gl01> gl01 = gl01repo.findByOptionid("GL01");
+        if (gl01.isPresent()) {
+            Gl01 gl011 = gl01.get();
+            gl011.setNextbtchno(intBatch+1);
+            gl01repo.save(gl011);
+        }
+    }
+    /*
+
+     public void updateNextBatchNo(String btchNo) {
+      String btch = todaysBatch.replaceAll("^0+(?!$)", "");
+      int intBatch = Integer.parseInt(btch);
+      Optional<Gl01> gl01 = gl01repo.findByOptionid("GL01");
+        if (gl01.isPresent()) {
+            Gl01 gl011 = gl01.get();
+            gl011.setNextbtchno(nextBatchNo);
+            gl01repo.save(gl011);
+        }
+    }
+
+
+    public Boolean findBatchDesc(String batchdesc) {
+        Glbctl fetchedDesc = glbctl_repo.findByBtchdesc(batchdesc);
+        if (fetchedDesc != null) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+
+
+    public Glbctl findGlbctlByBatchdesc(String batchdesc) {
+        Glbctl entity = glbctl_repo.findByBtchdesc(batchdesc);
+        return entity;
+    }
+     public Gljeh findGljehByBatchid(String batchid) {
+        Gljeh gljeh = gljeh_repo.findByBatchid(batchid);
+        return gljeh;
+    }
+    public int detailCount(String batchid) {
+        int detailCount = gljeh_repo.findDetailCount(batchid);
+        return detailCount;
     }
     public Boolean findByAccountIdHI(requestDTO requestDTO) {
         Optional<com.sagemcintegration.model.mssql.hi.gl.Glamf> fetchedDebitAcc = HIGlamf_repo.findByAcctfmttd(requestDTO.getDebitAccountId());
@@ -1157,7 +1703,7 @@ public class service {
                 .amtaxtobe(BigDecimal.valueOf(0))
                 .taxoutbal(BigDecimal.valueOf(0))
                 .codeoper((short) 1)
-                .acctrec1("20210240")
+                .acctrec1("12140")
                 .acctrec2("")
                 .acctrec3("")
                 .acctrec4("")
@@ -1752,6 +2298,6 @@ public class service {
         return true;
 
 
-    }
+    } */
 
 }

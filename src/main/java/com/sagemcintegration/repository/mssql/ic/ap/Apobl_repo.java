@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface Apobl_repo extends JpaRepository<Apobl,String> {
     @Query("SELECT cntbtch as lines, dateinvcdu as postdate,idponbr as ponumber,audtdate as date,fiscyr as fiscyear,fiscper as fiscperiod,idinvc as invoicenumber," +
@@ -12,6 +13,6 @@ public interface Apobl_repo extends JpaRepository<Apobl,String> {
             "cntitem as detailnum from Apobl where dateinvcdu = :id")
     List<Apobl>findSageReceiptByDate(int id);
     List<Apobl>findByDateinvcdu(int id);
-
+    Optional<Apobl> findByIdinvc(String idinvc);
 
 }

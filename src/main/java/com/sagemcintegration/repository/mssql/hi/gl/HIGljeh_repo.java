@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 public interface HIGljeh_repo extends JpaRepository<Gljeh, GljehPK> {
     @Query(value = "select * from Gljeh where batchid = :batchid", nativeQuery = true)
     Gljeh findByBatchid(String batchid);
-    @Query(value = "select detailcnt from Gljeh where batchid = :batchid", nativeQuery = true)
-    Integer findDetailCount(@Param("batchid") String batchid);
+
+    @Query(value = "select max(btchentry) from Gljeh where batchid = :batchid", nativeQuery = true)
+    String findBatchEntry(@Param("batchid") String batchid);
 }

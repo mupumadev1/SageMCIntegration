@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 
 @Data
 @AllArgsConstructor
@@ -16,13 +18,16 @@ public class requestDTO {
     private String currency;
 
     private String transactionReference;
-
+    private List<infoDTO> debits;
+    private List<infoDTO> credits;
     private String debitAccountId;
 
     private String creditAccountId;
 
     private String creditAmount;
-
+    private String creditTaxAmount;
+    private String creditTaxableAmount;
+    private  short taxClass;
     private String debitAmount;
 
     private String docType;
