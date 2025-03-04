@@ -243,7 +243,7 @@ public class hiservice {
                 .swmanrte((short) 0)
                 .exchratehc(BigDecimal.valueOf(1))
                 .origratehc(BigDecimal.valueOf(1))
-                .termcode("00Days")
+                .termcode("45DAYS")
                 .swtermovrd((short) 1)
                 .datedue(currentDate())
                 .datedisc(0)
@@ -252,7 +252,7 @@ public class hiservice {
                 .lastline(1)
                 .swtaxbl((short) 0)
                 .swcalctx((short) 0)
-                .codetaxgrp(vatcode)
+                .codetaxgrp("INZMW01")
                 .codetax1("VAT"+invoiceDto.getCurrency())
                 .codetax2("")
                 .codetax3("")
@@ -298,7 +298,7 @@ public class hiservice {
                 .amtrectax(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
                 .codepayppd(0)
                 .codevndgrp(invoiceDto.getCurrency())
-                .termsdesc("CashonDelivery")
+                .termsdesc("45Days")
                 .iddistset("")
                 .id1099Clas("")
                 .amttaxtot(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
@@ -464,7 +464,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .swtaxincl3((short) 0)
                     .swtaxincl4((short) 0)
                     .swtaxincl5((short) 0)
-                    .ratetax1(bigDecimalValue(dto.getTaxRate()))
+                    .ratetax1(bigDecimalValue((invoiceDto.getTaxClass()==(short) 1?"16.0":"0.0")))
                     .ratetax2(BigDecimal.valueOf(0))
                     .ratetax3(BigDecimal.valueOf(0))
                     .ratetax4(BigDecimal.valueOf(0))
@@ -737,7 +737,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .swmanrte((short) 0)
                 .exchratehc(BigDecimal.valueOf(1))
                 .origratehc(BigDecimal.valueOf(1))
-                .termcode("00Days")
+                .termcode("45DAYS")
                 .swtermovrd((short) 1)
                 .datedue(currentDate())
                 .datedisc(0)
@@ -746,7 +746,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .lastline(1)
                 .swtaxbl((short) 0)
                 .swcalctx((short) 0)
-                .codetaxgrp(vatcode)
+                .codetaxgrp("INZMW01")
                 .codetax1("VAT" + invoiceDto.getCurrency())
                 .codetax2("")
                 .codetax3("")
@@ -792,7 +792,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .amtrectax(BigDecimal.valueOf(0))
                 .codepayppd(0)
                 .codevndgrp(invoiceDto.getCurrency())
-                .termsdesc("CashonDelivery")
+                .termsdesc("45Days")
                 .iddistset("")
                 .id1099Clas("")
                 .amttaxtot(BigDecimal.valueOf(0))
@@ -1137,7 +1137,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .dateedit(date)
                 .batchtype("1")
                 .batchid(batch)
-                .batchstat("1")
+                .batchstat("9")
                 .postngseq(0)
                 .debittot(bigDecimalValue(requestDTO.getDebitAmount()))
                 .credittot(bigDecimalValue(requestDTO.getCreditAmount()))
@@ -1411,7 +1411,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
         numericValue++; // Increment the numeric value
 
         // Format the new batch entry string
-        return String.format("%04d", numericValue);
+        return String.format("%05d", numericValue);
 
     }
     public  boolean checkJournalDetailsDuplicatesHi(String journalHeader) {

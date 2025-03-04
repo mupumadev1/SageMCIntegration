@@ -11,5 +11,5 @@ public interface Gljed_repo extends JpaRepository<Gljed, GljedPK> {
      Gljed findByBatchnbr(String batchid);
 
 
-     Optional<Gljed> findByTransref(String transref);
+     Optional<Gljed> findFirstByTransref(String transref);
 }

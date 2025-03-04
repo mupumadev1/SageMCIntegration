@@ -29,6 +29,7 @@ public class controller {
           return transactionProcessingService.processTransaction(requestDTO);
         } catch (Exception e) {
             System.out.print(e);
+
             responseDTO response = responseDTO.builder()
                     .responseCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
                     .responseMessage("Internal Server Error")

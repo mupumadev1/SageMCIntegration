@@ -16,12 +16,10 @@ import java.util.Map;
 public class requestDTO {
     private String transactionDescription;
     private String currency;
-
     private String transactionReference;
     private List<infoDTO> debits;
     private List<infoDTO> credits;
     private String debitAccountId;
-
     private String creditAccountId;
 
     private String creditAmount;

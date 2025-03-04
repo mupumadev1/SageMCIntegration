@@ -2,9 +2,9 @@ package com.sagemcintegration.service;
 
 import com.sagemcintegration.dto.requestDTO;
 import com.sagemcintegration.dto.responseDTO;
-import com.sagemcintegration.model.mssql.hi.gl.Glbctl;
 import com.sagemcintegration.repository.mssql.hi.ap.HIApobl_repo;
 import com.sagemcintegration.repository.mssql.hi.ap.HIApven_repo;
+import com.sagemcintegration.repository.mssql.ic.ap.Apibh_repo;
 import com.sagemcintegration.repository.mssql.ic.ap.Apobl_repo;
 import com.sagemcintegration.repository.mssql.ic.ap.Apven_repo;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,12 +26,10 @@ public class TransactionProcessingService {
     private service service;
     @Autowired
     private hiservice hiService;
-    @Autowired
-    private Apven_repo apven_repo;
-    @Autowired
-    private HIApven_repo HI_apven_repo;
-    private final Apobl_repo apoblRepo;
 
+    private final Apobl_repo apoblRepo;
+    @Autowired
+    private Apibh_repo apibh_repo;
     private HttpServletRequest request;
 
     private final HIApobl_repo hi_apoblRepo;
@@ -99,9 +97,10 @@ public class TransactionProcessingService {
 
     // Helper function to process Invoice and Credit Notes for Service
     private ResponseEntity<responseDTO> processInvoiceCreditNoteForService(requestDTO requestDTO) throws Exception {
-        if (apoblRepo.findByIdinvc(formatInvoiceNumber(requestDTO.getTransactionReference().trim())).isPresent()) {
+        if (apibh_repo.findByIdinvc(formatInvoiceNumber(requestDTO.getTransactionReference().trim())).isPresent()) {
             return buildErrorResponse(HttpStatus.ALREADY_REPORTED, "Transaction could not be saved.");
         } else {
+
             if (service.createInvoice(requestDTO)) {
                 service.updateBatchNumber();
                 service.insertProcessedTransaction(requestDTO, getClientIp());
