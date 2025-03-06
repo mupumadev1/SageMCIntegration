@@ -1616,7 +1616,7 @@ public class service {
                 .fscsperd(period)
                 .swedit((short) 0)
                 .swreverse((short) 0)
-                .jrnldesc(validateReference(requestDTO.getTransactionDescription()))
+                .jrnldesc(validateReference(requestDTO.getDocReference()))
                 .jrnldr(bigDecimalValue(requestDTO.getDebitAmount()))
                 .jrnlcr(bigDecimalValue(requestDTO.getCreditAmount()))
                 .jrnlqty(BigDecimal.valueOf(0))

@@ -17,6 +17,7 @@ public class requestDTO {
     private String transactionDescription;
     private String currency;
     private String transactionReference;
+    private String docReference;
     private List<infoDTO> debits;
     private List<infoDTO> credits;
     private String debitAccountId;
