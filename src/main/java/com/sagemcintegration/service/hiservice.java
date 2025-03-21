@@ -4,7 +4,6 @@ import com.sagemcintegration.dto.infoDTO;
 import com.sagemcintegration.dto.requestDTO;
 import com.sagemcintegration.model.mssql.hi.gl.*;
 import com.sagemcintegration.model.mssql.hi.ap.*;
-import com.sagemcintegration.model.mysql.ProcessedTransactions;
 import com.sagemcintegration.repository.mssql.hi.ap.*;
 import com.sagemcintegration.repository.mssql.hi.gl.*;
 import com.sagemcintegration.repository.mssql.ic.ap.Apven_repo;
@@ -36,15 +35,19 @@ public class hiservice {
 
     public Boolean findByAccountIdHI(requestDTO requestDTO) {
         for (infoDTO accounts : requestDTO.getDebits()) {
-            Optional<Glamf> fetchedAcc = HIGlamf_repo.findByAcctfmttd(accounts.getAccountId());
-            Optional<Apven> fetchedCreditNoteDebitAcc = HIApven_repo.findByVendorid(accounts.getAccountId());
-
-            if (fetchedAcc.isEmpty() || fetchedCreditNoteDebitAcc.isEmpty()) {
-                return false;
+            if (Double.parseDouble(accounts.getAmount()) < 0) {
+                Optional<Apven> ven = HIApven_repo.findByVendorid(accounts.getAccountId());
+                if (ven.isEmpty()) {
+                    return false;
+                }
+            } else {
+                Optional<Glamf> fetchedDebitAcc = HIGlamf_repo.findByAcctfmttd(accounts.getAccountId());
+                if (fetchedDebitAcc.isEmpty()) {
+                    return false;
+                }
             }
         }
         return true;
-
 
     }
     public String formatInvoiceNumber(String rawInv){
@@ -123,6 +126,12 @@ public class hiservice {
         return Integer.parseInt(cleanedDate);
     }
 
+    public int docDate(String dateString) {
+
+        String cleanedDate = dateString.replaceAll(("-*"), "");
+        return Integer.parseInt(cleanedDate);
+    }
+
 
 
     public String currentTime() {
@@ -182,18 +191,18 @@ public class hiservice {
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("HDIDAT")
                 .datebtch(Integer.parseInt(invoiceDto.getTransactionDate()))
                 .btchdesc(validateReference(invoiceDto.getTransactionDescription()))
                 .cntinvcent(1)
                 .amtentr(bigDecimalValue(invoiceDto.getDebitAmount()))
-                .btchtype((short) 5)
+                .btchtype((short) 2)
                 .btchstts((short) 1)
                 .invctype((short) 1)
-                .cntlstitem(2)
+                .cntlstitem(1)
                 .postseqnbr(0)
                 .nbrerrors(0)
-                .dtelstedit(Integer.parseInt(invoiceDto.getTransactionDate()))
+                .dtelstedit(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
                 .swprinted((short) 0)
                 .srceappl("AP")
                 .swict((short) 0)
@@ -212,7 +221,7 @@ public class hiservice {
         String period = Integer.toString(month);
         String fiscyr = Integer.toString(year);
         int batch = getAPBatchNumber();
-        String vatcode = "VATIN" + invoiceDto.getCurrency();
+
         Apibh apibh = Apibh.builder()
                 .apibhPK(ApibhPK.builder()
                         .cntbtch(batch)
@@ -221,9 +230,9 @@ public class hiservice {
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("HDIDAT")
                 .idvend(vendorId)
-                .idinvc("INV" + invoiceDto.getTransactionReference())
+                .idinvc(formatInvoiceNumber(invoiceDto.getTransactionReference()))
                 .idrmitto("")
                 .texttrx((short) 1)
                 .idtrx((short) 12)
@@ -234,8 +243,8 @@ public class hiservice {
                 .swprtinvc((short) 0)
                 .invcapplto("")
                 .idacctset(invoiceDto.getCurrency())
-                .dateinvc(currentDate())
-                .dateasof(currentDate())
+                .dateinvc(docDate(invoiceDto.getTransactionDate()))
+                .dateasof(docDate(invoiceDto.getTransactionDate()))
                 .fiscyr(fiscyr)
                 .fiscper(period)
                 .codecurn(invoiceDto.getCurrency())
@@ -244,16 +253,16 @@ public class hiservice {
                 .exchratehc(BigDecimal.valueOf(1))
                 .origratehc(BigDecimal.valueOf(1))
                 .termcode("45DAYS")
-                .swtermovrd((short) 1)
-                .datedue(currentDate())
+                .swtermovrd((short) 0)
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .datedisc(0)
                 .pctdisc(BigDecimal.valueOf(0))
                 .amtdiscavl(BigDecimal.valueOf(0))
                 .lastline(1)
-                .swtaxbl((short) 0)
-                .swcalctx((short) 0)
+                .swtaxbl(invoiceDto.getTaxClass() == (short)1 ? (short)1 : (short)0)
+                .swcalctx(invoiceDto.getTaxClass() == (short)1 ? (short)1 : (short)0)
                 .codetaxgrp("INZMW01")
-                .codetax1("VAT"+invoiceDto.getCurrency())
+                .codetax1("VATZMW")
                 .codetax2("")
                 .codetax3("")
                 .codetax4("")
@@ -276,10 +285,10 @@ public class hiservice {
                 .amt1099(BigDecimal.valueOf(0))
                 .amtdistset(BigDecimal.valueOf(0))
                 .amttaxdist(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
-                .amtinvctot(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtinvctot(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
                 .amtalloctx(BigDecimal.valueOf(0))
                 .cntpaymsch(1)
-                .amttotdist(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amttotdist(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
                 .amtgrosdst(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .idppd("")
                 .textrmit("")
@@ -337,9 +346,9 @@ public class hiservice {
                 .amtppd(BigDecimal.valueOf(0))
                 .idstdinvc("")
                 .dateprcs(0)
-                .amtdsbwtax(bigDecimalValue(invoiceDto.getCreditAmount()))
-                .amtdsbntax(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
-                .amtdscbase(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtdsbwtax(BigDecimal.valueOf(0))
+                .amtdsbntax(BigDecimal.valueOf(0))
+                .amtdscbase(BigDecimal.valueOf(0))
                 .swrtginvc((short) 0)
                 .rtgapplyto("")
                 .swrtg((short) 0)
@@ -363,9 +372,9 @@ public class hiservice {
                 .codecurnrc(invoiceDto.getCurrency())
                 .swtxctlrc((short) 0)
                 .raterc(BigDecimal.valueOf(1))
-                .ratetyperc("SP")
-                .ratedaterc(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
-                .rateoprc((short) 1)
+                .ratetyperc("")
+                .ratedaterc(0)
+                .rateoprc((short) 0)
                 .swraterc((short) 0)
                 .txamt1Rc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
                 .txamt2Rc(BigDecimal.valueOf(0))
@@ -375,7 +384,7 @@ public class hiservice {
                 .txtotrc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
                 .txallrc(BigDecimal.valueOf(0))
                 .txexprc(BigDecimal.valueOf(0))
-                .txrecrc(BigDecimal.valueOf(0))
+                .txrecrc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
                 .txbsert1Tc(BigDecimal.valueOf(0))
                 .txbsert2Tc(BigDecimal.valueOf(0))
                 .txbsert3Tc(BigDecimal.valueOf(0))
@@ -396,7 +405,7 @@ public class hiservice {
                 .txamt3Hc(BigDecimal.valueOf(0))
                 .txamt4Hc(BigDecimal.valueOf(0))
                 .txamt5Hc(BigDecimal.valueOf(0))
-                .amtgroshc(BigDecimal.valueOf(1000))
+                .amtgroshc(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .rtgamthc(BigDecimal.valueOf(0))
                 .amtdischc(BigDecimal.valueOf(0))
                 .amt1099Hc(BigDecimal.valueOf(0))
@@ -405,7 +414,7 @@ public class hiservice {
                 .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .textven(vendorName)
                 .enteredby("ADMIN")
-                .datebus(currentDate())
+                .datebus(docDate(invoiceDto.getTransactionDate()))
                 .idn("")
                 .amtwht1Tc(BigDecimal.valueOf(0))
                 .amtwht2Tc(BigDecimal.valueOf(0))
@@ -426,6 +435,252 @@ public class hiservice {
         HIApibh_repo.save(apibh);
         return true;
     }
+
+    public String formatInvoiceNumberCrn(String rawInv){
+        String formattedInv = "CRN" + rawInv;
+        // Calculate the number of zeros needed to reach 13 characters
+        int requiredLength = 13;
+        int currentLength = formattedInv.length();
+        // If the current length is less than required, pad with zeros
+        if (currentLength < requiredLength) {
+            // Calculate how many zeros are needed
+            int zerosNeeded = requiredLength - currentLength;
+            // Create a string of zeros
+            return formattedInv + "0".repeat(zerosNeeded) // Append zeros at the end
+                    ;
+        } else if (currentLength > requiredLength) {
+            // If the length exceeds, truncate to keep only the last 13 characters
+            return formattedInv.substring(currentLength - requiredLength);
+        } else {
+            // If already 13 characters long, return as is
+            return formattedInv;
+        }
+    }
+    public boolean insertApibhCrnHI(requestDTO invoiceDto) {
+        Optional<Apven> obj = HIApven_repo.findByVendorid(invoiceDto.getCreditAccountId());
+        String vendorId = obj.map(Apven::getVendorid).orElse(null);
+        String vendorName = obj.map(Apven::getVendname).orElse(null);
+        int month = getMonthYear()[0];
+        int year = getMonthYear()[1];
+        String period = Integer.toString(month);
+        String fiscyr = Integer.toString(year);
+        int batch = getAPBatchNumber();
+
+        Apibh apibh = Apibh.builder()
+                .apibhPK(ApibhPK.builder()
+                        .cntbtch(batch)
+                        .cntitem(1)
+                        .build())
+                .audtdate(currentDate())
+                .audttime(Integer.parseInt(currentTime()))
+                .audtuser("ADMIN")
+                .audtorg("HDIDAT")
+                .idvend(vendorId)
+                .idinvc(formatInvoiceNumberCrn(invoiceDto.getTransactionReference()))
+                .idrmitto("")
+                .texttrx((short) 3)
+                .idtrx((short) 32)
+                .invcstts((short) 0)
+                .ordrnbr("")
+                .ponbr("")
+                .invcdesc(validateReference(invoiceDto.getTransactionDescription()))
+                .swprtinvc((short) 0)
+                .invcapplto("")
+                .idacctset(invoiceDto.getCurrency())
+                .dateinvc(docDate(invoiceDto.getTransactionDate()))
+                .dateasof(docDate(invoiceDto.getTransactionDate()))
+                .fiscyr(fiscyr)
+                .fiscper(period)
+                .codecurn(invoiceDto.getCurrency())
+                .ratetype("SP")
+                .swmanrte((short) 0)
+                .exchratehc(BigDecimal.valueOf(1))
+                .origratehc(BigDecimal.valueOf(1))
+                .termcode("45DAYS")
+                .swtermovrd((short) 0)
+                .datedue(docDate(invoiceDto.getTransactionDate()))
+                .datedisc(0)
+                .pctdisc(BigDecimal.valueOf(0))
+                .amtdiscavl(BigDecimal.valueOf(0))
+                .lastline(1)
+                .swtaxbl(invoiceDto.getTaxClass() == (short)1 ? (short)1 : (short)0)
+                .swcalctx(invoiceDto.getTaxClass() == (short)1 ? (short)1 : (short)0)
+                .codetaxgrp("INZMW01")
+                .codetax1("VATZMW")
+                .codetax2("")
+                .codetax3("")
+                .codetax4("")
+                .codetax5("")
+                .taxclass1(invoiceDto.getTaxClass())
+                .taxclass2((short) 0)
+                .taxclass3((short) 0)
+                .taxclass4((short) 0)
+                .taxclass5((short) 0)
+                .basetax1(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
+                .basetax2(BigDecimal.valueOf(0))
+                .basetax3(BigDecimal.valueOf(0))
+                .basetax4(BigDecimal.valueOf(0))
+                .basetax5(BigDecimal.valueOf(0))
+                .amttax1(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .amttax2(BigDecimal.valueOf(0))
+                .amttax3(BigDecimal.valueOf(0))
+                .amttax4(BigDecimal.valueOf(0))
+                .amttax5(BigDecimal.valueOf(0))
+                .amt1099(BigDecimal.valueOf(0))
+                .amtdistset(BigDecimal.valueOf(0))
+                .amttaxdist(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .amtinvctot(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
+                .amtalloctx(BigDecimal.valueOf(0))
+                .cntpaymsch(1)
+                .amttotdist(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
+                .amtgrosdst(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .idppd("")
+                .textrmit("")
+                .textste1("")
+                .textste2("")
+                .textste3("")
+                .textste4("")
+                .namecity("")
+                .codestte("")
+                .codepstl("")
+                .codectry("")
+                .namectac("")
+                .textphon("")
+                .textfax("")
+                .daterate(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
+                .amtrectax(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .codepayppd(0)
+                .codevndgrp(invoiceDto.getCurrency())
+                .termsdesc("45Days")
+                .iddistset("")
+                .id1099Clas("")
+                .amttaxtot(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .amtgrostot(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .swtaxincl1((short) 0)
+                .swtaxincl2((short) 0)
+                .swtaxincl3((short) 0)
+                .swtaxincl4((short) 0)
+                .swtaxincl5((short) 0)
+                .amtexptax(BigDecimal.valueOf(0))
+                .amtaxtobe(BigDecimal.valueOf(0))
+                .taxoutbal(BigDecimal.valueOf(0))
+                .codeoper((short) 1)
+                .acctrec1("12140")
+                .acctrec2("")
+                .acctrec3("")
+                .acctrec4("")
+                .acctrec5("")
+                .acctexp1("")
+                .acctexp2("")
+                .acctexp3("")
+                .acctexp4("")
+                .acctexp5("")
+                .drillapp("")
+                .drilltype((short) 0)
+                .drilldwnlk(0)
+                .swjob((short) 0)
+                .amtrecdist(BigDecimal.valueOf(0))
+                .amtexpdist(BigDecimal.valueOf(0))
+                .errbatch(0)
+                .errentry(0)
+                .email("")
+                .ctacphone("")
+                .ctacfax("")
+                .ctacemail("")
+                .amtppd(BigDecimal.valueOf(0))
+                .idstdinvc("")
+                .dateprcs(0)
+                .amtdsbwtax(BigDecimal.valueOf(0))
+                .amtdsbntax(BigDecimal.valueOf(0))
+                .amtdscbase(BigDecimal.valueOf(0))
+                .swrtginvc((short) 0)
+                .rtgapplyto("")
+                .swrtg((short) 0)
+                .rtgamt(BigDecimal.valueOf(0))
+                .rtgpercent(BigDecimal.valueOf(0))
+                .rtgdays((short) 0)
+                .rtgdatedue(0)
+                .rtgterms("")
+                .swrtgddtov((short) 0)
+                .swrtgamtov((short) 0)
+                .swrtgrate((short) 0)
+                .swtxbsectl((short) 0)
+                .values(0)
+                .origcomp("")
+                .detailcnt(invoiceDto.getDebits().toArray().length)
+                .srceappl("AP")
+                .swhold((short) 0)
+                .apversion("67A")
+                .taxversion(1)
+                .swtxrtgrpt((short) 0)
+                .codecurnrc(invoiceDto.getCurrency())
+                .swtxctlrc((short) 0)
+                .raterc(BigDecimal.valueOf(1))
+                .ratetyperc("")
+                .ratedaterc(0)
+                .rateoprc((short) 0)
+                .swraterc((short) 0)
+                .txamt1Rc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .txamt2Rc(BigDecimal.valueOf(0))
+                .txamt3Rc(BigDecimal.valueOf(0))
+                .txamt4Rc(BigDecimal.valueOf(0))
+                .txamt5Rc(BigDecimal.valueOf(0))
+                .txtotrc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .txallrc(BigDecimal.valueOf(0))
+                .txexprc(BigDecimal.valueOf(0))
+                .txrecrc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .txbsert1Tc(BigDecimal.valueOf(0))
+                .txbsert2Tc(BigDecimal.valueOf(0))
+                .txbsert3Tc(BigDecimal.valueOf(0))
+                .txbsert4Tc(BigDecimal.valueOf(0))
+                .txbsert5Tc(BigDecimal.valueOf(0))
+                .txamtrt1Tc(BigDecimal.valueOf(0))
+                .txamtrt2Tc(BigDecimal.valueOf(0))
+                .txamtrt3Tc(BigDecimal.valueOf(0))
+                .txamtrt4Tc(BigDecimal.valueOf(0))
+                .txamtrt5Tc(BigDecimal.valueOf(0))
+                .txbse1Hc(bigDecimalValue(invoiceDto.getCreditTaxableAmount()))
+                .txbse2Hc(BigDecimal.valueOf(0))
+                .txbse3Hc(BigDecimal.valueOf(0))
+                .txbse4Hc(BigDecimal.valueOf(0))
+                .txbse5Hc(BigDecimal.valueOf(0))
+                .txamt1Hc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
+                .txamt2Hc(BigDecimal.valueOf(0))
+                .txamt3Hc(BigDecimal.valueOf(0))
+                .txamt4Hc(BigDecimal.valueOf(0))
+                .txamt5Hc(BigDecimal.valueOf(0))
+                .amtgroshc(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .rtgamthc(BigDecimal.valueOf(0))
+                .amtdischc(BigDecimal.valueOf(0))
+                .amt1099Hc(BigDecimal.valueOf(0))
+                .amtppdhc(BigDecimal.valueOf(0))
+                .amtduetc(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
+                .textven(vendorName)
+                .enteredby("ADMIN")
+                .datebus(docDate(invoiceDto.getTransactionDate()))
+                .idn("")
+                .amtwht1Tc(BigDecimal.valueOf(0))
+                .amtwht2Tc(BigDecimal.valueOf(0))
+                .amtwht3Tc(BigDecimal.valueOf(0))
+                .amtwht4Tc(BigDecimal.valueOf(0))
+                .amtwht5Tc(BigDecimal.valueOf(0))
+                .amtcxbs1Tc(BigDecimal.valueOf(0))
+                .amtcxbs2Tc(BigDecimal.valueOf(0))
+                .amtcxbs3Tc(BigDecimal.valueOf(0))
+                .amtcxbs4Tc(BigDecimal.valueOf(0))
+                .amtcxbs5Tc(BigDecimal.valueOf(0))
+                .amtcxtx1Tc(BigDecimal.valueOf(0))
+                .amtcxtx2Tc(BigDecimal.valueOf(0))
+                .amtcxtx3Tc(BigDecimal.valueOf(0))
+                .amtcxtx4Tc(BigDecimal.valueOf(0))
+                .amtcxtx5Tc(BigDecimal.valueOf(0))
+                .build();
+        HIApibh_repo.save(apibh);
+        return true;
+    }
+
+
 public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
         return HIGlbctl_repo.findByBtchdescAndBatchstat(desc,"1");
 }
@@ -443,7 +698,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .audtdate(currentDate())
                     .audttime(Integer.parseInt(currentTime()))
                     .audtorg("ADMIN")
-                    .audtuser("ICLCOM")
+                    .audtuser("HDIDAT")
                     .iddist("")
                     .textdesc(validateReference(invoiceDto.getTransactionDescription()))
                     .swmanldist((short) 0)
@@ -454,7 +709,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .basetax3(BigDecimal.valueOf(0))
                     .basetax4(BigDecimal.valueOf(0))
                     .basetax5(BigDecimal.valueOf(0))
-                    .taxclass1((short) 1)
+                    .taxclass1(invoiceDto.getTaxClass())
                     .taxclass2((short) 0)
                     .taxclass3((short) 0)
                     .taxclass4((short) 0)
@@ -478,9 +733,9 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .idaccttax(dto.getAccountId())
                     .id1099Clas("")
                     .amtdist(bigDecimalValue(dto.getTotalAmount()))
-                    .amtdistnet(bigDecimalValue(dto.getTotalAmount()))
-                    .amtincltax(BigDecimal.valueOf(0))
-                    .amtgldist(bigDecimalValue(dto.getTotalAmount()))
+                    .amtdistnet(bigDecimalValue(dto.getAmount()))
+                    .amtincltax(bigDecimalValue(dto.getTaxAmount()))
+                    .amtgldist(bigDecimalValue(dto.getAmount()))
                     .amttaxrec1(bigDecimalValue(dto.getTaxAmount()))
                     .amttaxrec2(BigDecimal.valueOf(0))
                     .amttaxrec3(BigDecimal.valueOf(0))
@@ -584,7 +839,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .txall4Tc(BigDecimal.valueOf(0))
                     .txall5Tc(BigDecimal.valueOf(0))
                     .amtcosthc(BigDecimal.valueOf(0))
-                    .amtdisthc(bigDecimalValue(dto.getAmount()))
+                    .amtdisthc(bigDecimalValue(dto.getTotalAmount()))
                     .distnethc(bigDecimalValue(dto.getAmount()))
                     .rtgamthc(BigDecimal.valueOf(0))
                     .txallrthc(BigDecimal.valueOf(0))
@@ -629,8 +884,8 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
-                .datedue(currentDate())
+                .audtorg("HDIDAT")
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .amtdue(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .datedisc(0)
                 .amtdisc(BigDecimal.valueOf(0))
@@ -655,7 +910,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
                 .audtorg("ICLCOM")
-                .datedue(currentDate())
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .amtdue(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .datedisc(0)
                 .amtdisc(BigDecimal.valueOf(0))
@@ -728,8 +983,8 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .swprtinvc((short) 0)
                 .invcapplto("")
                 .idacctset(invoiceDto.getCurrency())
-                .dateinvc(currentDate())
-                .dateasof(currentDate())
+                .dateinvc(docDate(invoiceDto.getTransactionDate()))
+                .dateasof(docDate(invoiceDto.getTransactionDate()))
                 .fiscyr(fiscyr)
                 .fiscper(period)
                 .codecurn(invoiceDto.getCurrency())
@@ -739,7 +994,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .origratehc(BigDecimal.valueOf(1))
                 .termcode("45DAYS")
                 .swtermovrd((short) 1)
-                .datedue(currentDate())
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .datedisc(0)
                 .pctdisc(BigDecimal.valueOf(0))
                 .amtdiscavl(BigDecimal.valueOf(0))
@@ -899,7 +1154,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .textven(vendorName)
                 .enteredby("ADMIN")
-                .datebus(currentDate())
+                .datebus(docDate(invoiceDto.getTransactionDate()))
                 .idn("")
                 .amtwht1Tc(BigDecimal.valueOf(0))
                 .amtwht2Tc(BigDecimal.valueOf(0))
@@ -1129,15 +1384,15 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .audtdate(date)
                 .audttime(Integer.parseInt(time))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("HDIDAT")
                 .activesw((short) 1)
                 .btchdesc(batchdesc)
                 .srceledgr("GL")
-                .datecreat(date)
-                .dateedit(date)
+                .datecreat(docDate(requestDTO.getTransactionDate()))
+                .dateedit(docDate(requestDTO.getTransactionDate()))
                 .batchtype("1")
                 .batchid(batch)
-                .batchstat("9")
+                .batchstat("1")
                 .postngseq(0)
                 .debittot(bigDecimalValue(requestDTO.getDebitAmount()))
                 .credittot(bigDecimalValue(requestDTO.getCreditAmount()))
@@ -1170,18 +1425,18 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .audtdate(date)
                 .audttime(Integer.parseInt(time))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("HDIDAT")
                 .srceledger("GL")
                 .srcetype("JE")
                 .fscsyr(fiscyr)
                 .fscsperd(period)
                 .swedit((short) 0)
                 .swreverse((short) 0)
-                .jrnldesc(validateReference(requestDTO.getTransactionDescription()))
+                .jrnldesc(validateReference(requestDTO.getDocReference()))
                 .jrnldr(bigDecimalValue(requestDTO.getDebitAmount()))
                 .jrnlcr(bigDecimalValue(requestDTO.getCreditAmount()))
                 .jrnlqty(BigDecimal.valueOf(0))
-                .dateentry(date)
+                .dateentry(docDate(requestDTO.getTransactionDate()))
                 .drilsrcty((short) 0)
                 .drilldwnlk(0)
                 .drilapp("")
@@ -1192,7 +1447,7 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .origcomp("")
                 .detailcnt(requestDTO.getDebits().toArray().length + requestDTO.getCredits().toArray().length)
                 .enteredby("ADMIN")
-                .docdate(date)
+                .docdate(docDate(requestDTO.getTransactionDate()))
                 .codetaxgrp("")
                 .classtype((short) 0)
                 .swmantx((short) 0)
@@ -1204,16 +1459,16 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                 .taxauth3("")
                 .taxauth4("")
                 .taxauth5("")
-                .taxvclss1(Short.parseShort("0"))
-                .taxvclss2(Short.parseShort("0"))
-                .taxvclss3(Short.parseShort("0"))
-                .taxvclss4(Short.parseShort("0"))
-                .taxvclss5(Short.parseShort("0"))
-                .taxiclss1(Short.parseShort("0"))
-                .taxiclss2(Short.parseShort("0"))
-                .taxiclss3(Short.parseShort("0"))
-                .taxiclss4(Short.parseShort("0"))
-                .taxiclss5(Short.parseShort("0"))
+                .taxvclss1((short)0)
+                .taxvclss2((short)0)
+                .taxvclss3((short)0)
+                .taxvclss4((short)0)
+                .taxvclss5((short)0)
+                .taxiclss1((short)0)
+                .taxiclss2((short)0)
+                .taxiclss3((short)0)
+                .taxiclss4((short)0)
+                .taxiclss5((short)0)
                 .basetax1(BigDecimal.valueOf(0))
                 .basetax2(BigDecimal.valueOf(0))
                 .basetax3(BigDecimal.valueOf(0))
@@ -1332,9 +1587,9 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .audtdate(date)
                     .audttime(Integer.parseInt(time))
                     .audtuser("ADMIN")
-                    .audtorg("ICLCOM")
+                    .audtorg("HDIDAT")
                     .acctid(dto.getAccountId())
-                    .companyid("ICLCOM")
+                    .companyid("HDIDAT")
                     .transamt(bigDecimalValue(dto.getAmount()).negate())
                     .transqty(BigDecimal.valueOf(0))
                     .scurndec("2")
@@ -1342,14 +1597,14 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .hcurncode("ZMW")
                     .ratetype("SP")
                     .scurncode("ZMW")
-                    .ratedate(date)
+                    .ratedate(docDate(requestDTO.getTransactionDate()))
                     .convrate(BigDecimal.valueOf(1))
                     .ratespread(BigDecimal.valueOf(0))
                     .datemtchcd("3")
                     .rateoper("1")
                     .transdesc(validateReference(requestDTO.getTransactionDescription()))
                     .transref(requestDTO.getTransactionReference())
-                    .transdate(date)
+                    .transdate(docDate(requestDTO.getTransactionDate()))
                     .srceldgr("GL")
                     .srcetype("JE")
                     .values(0)
@@ -1372,9 +1627,9 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .audtdate(date)
                     .audttime(Integer.parseInt(time))
                     .audtuser("ADMIN")
-                    .audtorg("ICLCOM")
+                    .audtorg("HDIDAT")
                     .acctid(dto.getAccountId())
-                    .companyid("ICLCOM")
+                    .companyid("HDIDAT")
                     .transamt(bigDecimalValue(dto.getAmount()))
                     .transqty(BigDecimal.valueOf(0))
                     .scurndec("2")
@@ -1382,14 +1637,14 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
                     .hcurncode("ZMW")
                     .ratetype("SP")
                     .scurncode("ZMW")
-                    .ratedate(date)
+                    .ratedate(docDate(requestDTO.getTransactionDate()))
                     .convrate(BigDecimal.valueOf(1))
                     .ratespread(BigDecimal.valueOf(0))
                     .datemtchcd("3")
                     .rateoper("1")
                     .transdesc(validateReference(requestDTO.getTransactionDescription()))
                     .transref(requestDTO.getTransactionReference())
-                    .transdate(date)
+                    .transdate(docDate(requestDTO.getTransactionDate()))
                     .srceldgr("GL")
                     .srcetype("JE")
                     .values(0)
@@ -1417,14 +1672,14 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
     public  boolean checkJournalDetailsDuplicatesHi(String journalHeader) {
         return HIGljed_repo.findByTransref(journalHeader).isPresent();
     }
-    public Boolean updateGlbctlHI(Glbctl glbctl, requestDTO requestDTO) {
+    public void updateGlbctlHI(Glbctl glbctl, requestDTO requestDTO) {
         BigDecimal initialDebittot = glbctl.getDebittot();
         BigDecimal initialCredittot = glbctl.getCredittot();
         BigDecimal debitTot = bigDecimalValue(requestDTO.getDebitAmount()).add(initialDebittot);
         BigDecimal creditTot = bigDecimalValue(requestDTO.getCreditAmount()).add(initialCredittot);
         glbctl.setDebittot(debitTot);
         glbctl.setCredittot(creditTot);
-        return true;
+        glbctl.setEntrycnt(glbctl.getEntrycnt() + 1);
     }
 
 /*

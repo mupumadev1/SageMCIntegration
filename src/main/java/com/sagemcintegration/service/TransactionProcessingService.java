@@ -67,7 +67,13 @@ public class TransactionProcessingService {
                 return processInvoiceCreditNoteForService(requestDTO);
             } else {
                 // Helper function to process Stock Transactions for Service
-                return processStockTransactionForService(requestDTO);
+                if(service.findGLAccountId(requestDTO)) {
+                    return processStockTransactionForService(requestDTO);
+                }
+                else{
+                    return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Error processing transaction GL account not found");
+
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();

@@ -8,6 +8,9 @@ import com.sagemcintegration.model.mysql.ProcessedTransactions;
 import com.sagemcintegration.repository.mssql.ic.ap.*;
 import com.sagemcintegration.repository.mssql.ic.gl.*;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -15,8 +18,9 @@ import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
-
+@Slf4j
 @org.springframework.stereotype.Service
 @AllArgsConstructor
 public class service {
@@ -148,6 +152,10 @@ public class service {
         String cleanedDate = dateString.replaceAll(("-*"), "");
         return Integer.parseInt(cleanedDate);
     }
+    public int docDate(String date){
+        String cleanedDate = date.replaceAll(("-*"), "");
+        return Integer.parseInt(cleanedDate);
+    }
     public int getAPBatchNumber() {
         int batchNo = app02_repo.findbatchid();
         return ++batchNo;
@@ -227,7 +235,7 @@ public class service {
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("ICLDAT")
                 .datebtch(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
                 .btchdesc(validateReference(invoiceDto.getTransactionDescription()))
                 .cntinvcent(1)
@@ -250,9 +258,6 @@ public class service {
     public boolean insertApibh(requestDTO invoiceDto) {
         short texttrx = 1;
         short idtrx = 12;
-        String invprefix= "INV";
-
-
         Optional<Apven> obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
         String vendorId = obj.map(Apven::getVendorid).orElse(null);
         String vendorName = obj.map(Apven::getVendname).orElse(null);
@@ -261,7 +266,7 @@ public class service {
         String period = Integer.toString(month);
         String fiscyr = Integer.toString(year);
         int batch = getAPBatchNumber();
-        String vatcode = "VATIN" + invoiceDto.getCurrency();
+
         Apibh apibh = Apibh.builder()
                 .apibhPK(ApibhPK.builder()
                         .cntbtch(batch)
@@ -270,7 +275,7 @@ public class service {
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("ICLDAT")
                 .idvend(vendorId)
                 .idinvc(formatInvoiceNumber(invoiceDto.getTransactionReference()))
                 .idrmitto("")
@@ -283,8 +288,8 @@ public class service {
                 .swprtinvc((short) 0)
                 .invcapplto("")
                 .idacctset(invoiceDto.getCurrency())
-                .dateinvc(currentDate())
-                .dateasof(currentDate())
+                .dateinvc(docDate(invoiceDto.getTransactionDate()))
+                .dateasof(docDate(invoiceDto.getTransactionDate()))
                 .fiscyr(fiscyr)
                 .fiscper(period)
                 .codecurn(invoiceDto.getCurrency())
@@ -294,7 +299,7 @@ public class service {
                 .origratehc(BigDecimal.valueOf(1))
                 .termcode("45DAYS")
                 .swtermovrd((short) 0)
-                .datedue(currentDate())
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .datedisc(0)
                 .pctdisc(BigDecimal.valueOf(0))
                 .amtdiscavl(BigDecimal.valueOf(0))
@@ -302,7 +307,7 @@ public class service {
                 .swtaxbl(invoiceDto.getTaxClass()==(short) 1 ? (short)1 :(short)0)
                 .swcalctx(invoiceDto.getTaxClass()==(short) 1 ? (short)1 :(short)0)
                 .codetaxgrp("INZMW01")
-                .codetax1("VAT"+invoiceDto.getCurrency())
+                .codetax1("VATZMW")
                 .codetax2("")
                 .codetax3("")
                 .codetax4("")
@@ -454,7 +459,7 @@ public class service {
                 .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .textven(vendorName)
                 .enteredby("ADMIN")
-                .datebus(currentDate())
+                .datebus(docDate(invoiceDto.getTransactionDate()))
                 .idn("")
                 .amtwht1Tc(BigDecimal.valueOf(0))
                 .amtwht2Tc(BigDecimal.valueOf(0))
@@ -498,7 +503,7 @@ public class service {
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("ICLDAT")
                 .idvend(vendorId)
                 .idinvc(formatInvoiceNumberCrn(invoiceDto.getTransactionReference()))
                 .idrmitto("")
@@ -511,8 +516,8 @@ public class service {
                 .swprtinvc((short) 0)
                 .invcapplto("")
                 .idacctset(invoiceDto.getCurrency())
-                .dateinvc(currentDate())
-                .dateasof(currentDate())
+                .dateinvc(docDate(invoiceDto.getTransactionDate()))
+                .dateasof(docDate(invoiceDto.getTransactionDate()))
                 .fiscyr(fiscyr)
                 .fiscper(period)
                 .codecurn(invoiceDto.getCurrency())
@@ -522,7 +527,7 @@ public class service {
                 .origratehc(BigDecimal.valueOf(1))
                 .termcode("45DAYS")
                 .swtermovrd((short) 0)
-                .datedue(currentDate())
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .datedisc(0)
                 .pctdisc(BigDecimal.valueOf(0))
                 .amtdiscavl(BigDecimal.valueOf(0))
@@ -682,7 +687,7 @@ public class service {
                 .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .textven(vendorName)
                 .enteredby("ADMIN")
-                .datebus(currentDate())
+                .datebus(docDate(invoiceDto.getTransactionDate()))
                 .idn("")
                 .amtwht1Tc(BigDecimal.valueOf(0))
                 .amtwht2Tc(BigDecimal.valueOf(0))
@@ -717,7 +722,7 @@ public class service {
                     .audtdate(currentDate())
                     .audttime(Integer.parseInt(currentTime()))
                     .audtorg("ADMIN")
-                    .audtuser("ICLCOM")
+                    .audtuser("ICLDAT")
                     .iddist("")
                     .textdesc(validateReference(invoiceDto.getTransactionDescription()))
                     .swmanldist((short) 0)
@@ -777,7 +782,7 @@ public class service {
                     .unitmeas("")
                     .qtyinvc(BigDecimal.valueOf(0))
                     .amtcost(BigDecimal.valueOf(0))
-                    .billdate(currentDate())
+                    .billdate(docDate(invoiceDto.getTransactionDate()))
                     .billrate(BigDecimal.valueOf(0))
                     .billcurn("")
                     .swibt((short) 0)
@@ -901,7 +906,7 @@ public class service {
                     .audtdate(currentDate())
                     .audttime(Integer.parseInt(currentTime()))
                     .audtorg("ADMIN")
-                    .audtuser("ICLCOM")
+                    .audtuser("ICLDAT")
                     .iddist("")
                     .textdesc(validateReference(invoiceDto.getTransactionDescription()))
                     .swmanldist((short) 0)
@@ -961,7 +966,7 @@ public class service {
                     .unitmeas("")
                     .qtyinvc(BigDecimal.valueOf(0))
                     .amtcost(BigDecimal.valueOf(0))
-                    .billdate(currentDate())
+                    .billdate(docDate(invoiceDto.getTransactionDate()))
                     .billrate(BigDecimal.valueOf(0))
                     .billcurn("")
                     .swibt((short) 0)
@@ -1083,8 +1088,8 @@ public class service {
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
-                .datedue(currentDate())
+                .audtorg("ICLDAT")
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .amtdue(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .datedisc(0)
                 .amtdisc(BigDecimal.valueOf(0))
@@ -1157,8 +1162,8 @@ public class service {
                 .swprtinvc((short) 0)
                 .invcapplto("")
                 .idacctset(invoiceDto.getCurrency())
-                .dateinvc(currentDate())
-                .dateasof(currentDate())
+                .dateinvc(docDate(invoiceDto.getTransactionDate()))
+                .dateasof(docDate(invoiceDto.getTransactionDate()))
                 .fiscyr(fiscyr)
                 .fiscper(period)
                 .codecurn(invoiceDto.getCurrency())
@@ -1168,7 +1173,7 @@ public class service {
                 .origratehc(BigDecimal.valueOf(1))
                 .termcode("45DAYS")
                 .swtermovrd((short) 0)
-                .datedue(currentDate())
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .datedisc(0)
                 .pctdisc(BigDecimal.valueOf(0))
                 .amtdiscavl(BigDecimal.valueOf(0))
@@ -1328,7 +1333,7 @@ public class service {
                 .amtduehc(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .textven(vendorName)
                 .enteredby("ADMIN")
-                .datebus(currentDate())
+                .datebus(docDate(invoiceDto.getTransactionDate()))
                 .idn("")
                 .amtwht1Tc(BigDecimal.valueOf(0))
                 .amtwht2Tc(BigDecimal.valueOf(0))
@@ -1420,7 +1425,7 @@ public class service {
                 .unitmeas("")
                 .qtyinvc(BigDecimal.valueOf(0))
                 .amtcost(BigDecimal.valueOf(0))
-                .billdate(currentDate())
+                .billdate(docDate(invoiceDto.getTransactionDate()))
                 .billrate(BigDecimal.valueOf(0))
                 .billcurn("")
                 .swibt((short) 0)
@@ -1542,7 +1547,7 @@ public class service {
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
                 .audtorg("ICLCOM")
-                .datedue(currentDate())
+                .datedue(docDate(invoiceDto.getTransactionDate()))
                 .amtdue(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .datedisc(0)
                 .amtdisc(BigDecimal.valueOf(0))
@@ -1568,12 +1573,12 @@ public class service {
                 .audtdate(date)
                 .audttime(Integer.parseInt(time))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("ICLDAT")
                 .activesw((short) 1)
                 .btchdesc(batchdesc)
                 .srceledgr("GL")
-                .datecreat(date)
-                .dateedit(date)
+                .datecreat(docDate(requestDTO.getTransactionDate()))
+                .dateedit(docDate(requestDTO.getTransactionDate()))
                 .batchtype("1")
                 .batchid(batch)
                 .batchstat("1")
@@ -1609,7 +1614,7 @@ public class service {
                 .audtdate(date)
                 .audttime(Integer.parseInt(time))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("ICLDAT")
                 .srceledger("GL")
                 .srcetype("JE")
                 .fscsyr(fiscyr)
@@ -1620,7 +1625,7 @@ public class service {
                 .jrnldr(bigDecimalValue(requestDTO.getDebitAmount()))
                 .jrnlcr(bigDecimalValue(requestDTO.getCreditAmount()))
                 .jrnlqty(BigDecimal.valueOf(0))
-                .dateentry(date)
+                .dateentry(docDate(requestDTO.getTransactionDate()))
                 .drilsrcty((short) 0)
                 .drilldwnlk(0)
                 .drilapp("")
@@ -1631,7 +1636,7 @@ public class service {
                 .origcomp("")
                 .detailcnt(requestDTO.getDebits().toArray().length + requestDTO.getCredits().toArray().length)
                 .enteredby("ADMIN")
-                .docdate(date)
+                .docdate(docDate(requestDTO.getTransactionDate()))
                 .codetaxgrp("")
                 .classtype((short) 0)
                 .swmantx((short) 0)
@@ -1763,43 +1768,49 @@ public String getBatchNextEntry(String batchid){
 
     @Transactional
     public boolean insertGljed(requestDTO requestDTO, String batchid, String btchentry) {
-        //String transactionNumber1 = generateTransactionNumber(1)[0];
-        //String transactionNumber2 = generateTransactionNumber(1)[1];
+        // Validate input
+        if (requestDTO == null || requestDTO.getCredits() == null || requestDTO.getDebits() == null) {
+            throw new IllegalArgumentException("Invalid requestDTO: Credits or Debits list is null");
+        }
+
         String batch = batchIDChecker(batchid);
-        int baseTransactionNumber1 = 20;
-        int baseTransactionNumber2 = 40;
+        int baseTransactionNumber = 1; // Single counter for both debits and credits
 
         int date = currentDate();
         String time = currentTime();
-        for (infoDTO dto: requestDTO.getCredits()){
-            String transactionNumber2 = String.format("%010d", baseTransactionNumber2);
+
+        // Process debits first
+        for (infoDTO dto: requestDTO.getDebits()) {
+            String transactionNumber = String.format("%010d", baseTransactionNumber);
+            //logger.info("Debit - Transaction Number: {}, Amount: {}", transactionNumber, dto.getAmount());
+
             Gljed gljed = Gljed.builder()
                     .gljedPK(GljedPK.builder()
                             .batchnbr(batch)
                             .journalid(btchentry)
-                            .transnbr(transactionNumber2)
+                            .transnbr(transactionNumber)
                             .build())
                     .audtdate(date)
                     .audttime(Integer.parseInt(time))
                     .audtuser("ADMIN")
-                    .audtorg("ICLCOM")
+                    .audtorg("ICLDAT")
                     .acctid(dto.getAccountId())
-                    .companyid("ICLCOM")
-                    .transamt(bigDecimalValue(dto.getAmount()).negate())
+                    .companyid("ICLDAT")
+                    .transamt(bigDecimalValue(dto.getAmount()))
                     .transqty(BigDecimal.valueOf(0))
                     .scurndec("2")
-                    .scurnamt(bigDecimalValue(dto.getAmount()).negate())
+                    .scurnamt(bigDecimalValue(dto.getAmount()))
                     .hcurncode("ZMW")
                     .ratetype("SP")
                     .scurncode("ZMW")
-                    .ratedate(date)
+                    .ratedate(docDate(requestDTO.getTransactionDate()))
                     .convrate(BigDecimal.valueOf(1))
                     .ratespread(BigDecimal.valueOf(0))
                     .datemtchcd("3")
                     .rateoper("1")
                     .transdesc(validateReference(requestDTO.getTransactionDescription()))
                     .transref(requestDTO.getTransactionReference())
-                    .transdate(date)
+                    .transdate(docDate(requestDTO.getTransactionDate()))
                     .srceldgr("GL")
                     .srcetype("JE")
                     .values(0)
@@ -1809,37 +1820,41 @@ public String getBatchNextEntry(String batchid){
                     .txaccttype((short) 0)
                     .build();
             gljed_repo.save(gljed);
-            baseTransactionNumber2 += 20;
+            baseTransactionNumber += 1; // Increment the counter
         }
-        for (infoDTO dto: requestDTO.getDebits()) {
-            String transactionNumber1 = String.format("%010d", baseTransactionNumber1);
-            Gljed gljed2 = Gljed.builder()
+
+        // Process credits, continuing from the last transaction number used by debits
+        for (infoDTO dto: requestDTO.getCredits()) {
+            String transactionNumber = String.format("%010d", baseTransactionNumber);
+            //logger.info("Credit - Transaction Number: {}, Amount: {}", transactionNumber, dto.getAmount());
+
+            Gljed gljed = Gljed.builder()
                     .gljedPK(GljedPK.builder()
                             .batchnbr(batch)
                             .journalid(btchentry)
-                            .transnbr(transactionNumber1)
+                            .transnbr(transactionNumber)
                             .build())
                     .audtdate(date)
                     .audttime(Integer.parseInt(time))
                     .audtuser("ADMIN")
-                    .audtorg("ICLCOM")
+                    .audtorg("ICLDAT")
                     .acctid(dto.getAccountId())
-                    .companyid("ICLCOM")
-                    .transamt(bigDecimalValue(dto.getAmount()))
+                    .companyid("ICLDAT")
+                    .transamt(bigDecimalValue(dto.getAmount()).negate())
                     .transqty(BigDecimal.valueOf(0))
                     .scurndec("2")
-                    .scurnamt(bigDecimalValue(dto.getAmount()))
+                    .scurnamt(bigDecimalValue(dto.getAmount()).negate())
                     .hcurncode("ZMW")
                     .ratetype("SP")
                     .scurncode("ZMW")
-                    .ratedate(date)
+                    .ratedate(docDate(requestDTO.getTransactionDate()))
                     .convrate(BigDecimal.valueOf(1))
                     .ratespread(BigDecimal.valueOf(0))
                     .datemtchcd("3")
                     .rateoper("1")
                     .transdesc(validateReference(requestDTO.getTransactionDescription()))
                     .transref(requestDTO.getTransactionReference())
-                    .transdate(date)
+                    .transdate(docDate(requestDTO.getTransactionDate()))
                     .srceldgr("GL")
                     .srcetype("JE")
                     .values(0)
@@ -1848,14 +1863,11 @@ public String getBatchNextEntry(String batchid){
                     .taxauth("")
                     .txaccttype((short) 0)
                     .build();
-            gljed_repo.save(gljed2);
-            baseTransactionNumber1 += 20;
+            gljed_repo.save(gljed);
+            baseTransactionNumber += 1; // Increment the counter
         }
 
-
         return true;
-
-
     }
     public Boolean updateGljeh(Gljeh gljeh, int detailCount, requestDTO requestDTO) {
         BigDecimal initialjrnlCr = gljeh.getJrnlcr();
@@ -1868,7 +1880,7 @@ public String getBatchNextEntry(String batchid){
         return true;
     }
 
-    public Boolean updateGlbctl(Glbctl glbctl, requestDTO requestDTO) {
+    public void updateGlbctl(Glbctl glbctl, requestDTO requestDTO) {
         BigDecimal initialDebittot = glbctl.getDebittot();
         BigDecimal initialCredittot = glbctl.getCredittot();
         BigDecimal debitTot = bigDecimalValue(requestDTO.getDebitAmount()).add(initialDebittot);
@@ -1876,7 +1888,6 @@ public String getBatchNextEntry(String batchid){
         glbctl.setDebittot(debitTot);
         glbctl.setCredittot(creditTot);
         glbctl.setEntrycnt(glbctl.getEntrycnt()+1);
-        return true;
     }
     public  boolean checkJournalDetailsDuplicates(String journalHeader) {
         return gljed_repo.findFirstByTransref(journalHeader).isPresent();
@@ -1890,6 +1901,39 @@ public String getBatchNextEntry(String batchid){
             gl011.setNextbtchno(intBatch+1);
             gl01repo.save(gl011);
         }
+    }
+
+    private static final Logger logger = LoggerFactory.getLogger(service.class);
+
+    public boolean findGLAccountId(requestDTO requestDTO) {
+        // Validate input
+        if (requestDTO == null || requestDTO.getDebits() == null || requestDTO.getCredits() == null) {
+            logger.error("Invalid requestDTO: Debits or Credits list is null");
+            return false;
+        }
+
+        // Check all debit accounts
+        if (!validateAccounts(requestDTO.getDebits(), "Debit")) {
+            return false;
+        }
+
+        // Check all credit accounts
+        if (!validateAccounts(requestDTO.getCredits(), "Credit")) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean validateAccounts(List<infoDTO> accounts, String accountType) {
+        for (infoDTO account : accounts) {
+            Optional<Glamf> fetchedAccount = glamf_repo.findByAcctfmttd(account.getAccountId());
+            if (fetchedAccount.isEmpty()) {
+                logger.warn("{} account ID not found: {}", accountType, account.getAccountId());
+                return false;
+            }
+        }
+        return true;
     }
     /*
 
