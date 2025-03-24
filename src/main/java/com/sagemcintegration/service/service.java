@@ -176,14 +176,15 @@ public class service {
         Optional<Apven> obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
         return obj.isPresent();
     }
-    public boolean createInvoice(requestDTO dto){
+    public boolean createInvoice(requestDTO dto,String batchdesc,int cntitem,int batch){
         if (Float.parseFloat(dto.getCreditTaxableAmount())<0){
-            return insertApibc(dto) &&insertApibhCrn(dto)&&insertApibdCrn(dto) &&insertApibs(dto);
+            return insertApibc(dto,batchdesc) &&insertApibhCrn(dto,cntitem,batch)&&insertApibdCrn(dto,cntitem,batch) &&insertApibs(dto,cntitem,batch);
         }
         else {
-            return insertApibc(dto) && insertApibh(dto) && insertApibs(dto) && insertApibd(dto);
+            return insertApibc(dto,batchdesc) && insertApibh(dto,cntitem,batch) && insertApibs(dto,cntitem,batch) && insertApibd(dto,cntitem,batch);
         }
     }
+
     public String formatInvoiceNumberCrn(String rawInv){
         String formattedInv = "CRN" + rawInv;
         // Calculate the number of zeros needed to reach 13 characters
@@ -225,7 +226,7 @@ public class service {
         }
     }
 
-    public boolean insertApibc(requestDTO invoiceDto) {
+    public boolean insertApibc(requestDTO invoiceDto, String batchdesc) {
        short invcType = 1;
 
         int batch = getAPBatchNumber();
@@ -237,7 +238,7 @@ public class service {
                 .audtuser("ADMIN")
                 .audtorg("ICLDAT")
                 .datebtch(Integer.parseInt(formattedDate(invoiceDto.getTransactionDate())))
-                .btchdesc(validateReference(invoiceDto.getTransactionDescription()))
+                .btchdesc(batchdesc)
                 .cntinvcent(1)
                 .amtentr(BigDecimal.valueOf(Double.parseDouble(invoiceDto.getCreditAmount())))
                 .btchtype((short) 2)
@@ -255,7 +256,7 @@ public class service {
         Optional<Apibc> fetchedObj = apibc_repo.findById(obj.getCntbtch());
         return fetchedObj.isPresent();
     }
-    public boolean insertApibh(requestDTO invoiceDto) {
+    public boolean insertApibh(requestDTO invoiceDto,int cntitem,int batch) {
         short texttrx = 1;
         short idtrx = 12;
         Optional<Apven> obj = apven_repo.findByVendorid(invoiceDto.getCreditAccountId());
@@ -265,12 +266,12 @@ public class service {
         int year = getMonthYear()[1];
         String period = Integer.toString(month);
         String fiscyr = Integer.toString(year);
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
 
         Apibh apibh = Apibh.builder()
                 .apibhPK(ApibhPK.builder()
                         .cntbtch(batch)
-                        .cntitem(1)
+                        .cntitem(cntitem)
                         .build())
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
@@ -480,7 +481,7 @@ public class service {
         apibh_repo.save(apibh);
         return true;
     }
-    public boolean insertApibhCrn(requestDTO invoiceDto) {
+    public boolean insertApibhCrn(requestDTO invoiceDto,int cntitem,int batch) {
         short texttrx = 3;
         short idtrx = 32;
         String invprefix= "CRN";
@@ -493,12 +494,12 @@ public class service {
         int year = getMonthYear()[1];
         String period = Integer.toString(month);
         String fiscyr = Integer.toString(year);
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
         String vatcode = "VATIN" + invoiceDto.getCurrency();
         Apibh apibh = Apibh.builder()
                 .apibhPK(ApibhPK.builder()
                         .cntbtch(batch)
-                        .cntitem(1)
+                        .cntitem(cntitem)
                         .build())
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
@@ -708,15 +709,15 @@ public class service {
         apibh_repo.save(apibh);
         return true;
     }
-    public boolean insertApibd(requestDTO invoiceDto) {
+    public boolean insertApibd(requestDTO invoiceDto,int cntitem,int batch) {
         int cntline = 20;
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
         for (infoDTO dto : invoiceDto.getDebits()) {
 
             Apibd apibd = Apibd.builder()
                     .apibdPK(ApibdPK.builder()
                             .cntbtch(batch)
-                            .cntitem(1)
+                            .cntitem(cntitem)
                             .cntline(cntline)
                             .build())
                     .audtdate(currentDate())
@@ -892,15 +893,15 @@ public class service {
         }
         return true;
     }
-    public boolean insertApibdCrn(requestDTO invoiceDto) {
+    public boolean insertApibdCrn(requestDTO invoiceDto,int cntitem,int batch) {
         int cntline = 20;
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
         for (infoDTO dto : invoiceDto.getDebits()) {
 
             Apibd apibd = Apibd.builder()
                     .apibdPK(ApibdPK.builder()
                             .cntbtch(batch)
-                            .cntitem(1)
+                            .cntitem(cntitem)
                             .cntline(cntline)
                             .build())
                     .audtdate(currentDate())
@@ -1076,14 +1077,14 @@ public class service {
         }
         return true;
     }
-    public boolean insertApibs(requestDTO invoiceDto) {
+    public boolean insertApibs(requestDTO invoiceDto,int cntitem,int batch) {
 
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
         Apibs apibs = Apibs.builder()
                 .apibsPK(ApibsPK.builder()
                         .cntbtch(batch)
                         .cntpaym(1)
-                        .cntitem(1)
+                        .cntitem(cntitem)
                         .build())
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
@@ -1546,7 +1547,7 @@ public class service {
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
                 .audtuser("ADMIN")
-                .audtorg("ICLCOM")
+                .audtorg("ICLDAT")
                 .datedue(docDate(invoiceDto.getTransactionDate()))
                 .amtdue(bigDecimalValue(invoiceDto.getCreditAmount()))
                 .datedisc(0)
@@ -1558,9 +1559,19 @@ public class service {
 
         return true;
     }
-    public boolean updateInvoice(requestDTO dto){
+    public boolean updateInvoice(requestDTO dto, Optional<Apibc> apibc){
 
-        return updateApibs(dto)&&updateApibc(dto)&&updateApibh(dto)&&updateApibd(dto);
+        int cntitem = apibc.get().getCntinvcent()+1;
+        BigDecimal amtentr = apibc.get().getAmtentr().add(bigDecimalValue(dto.getCreditAmount()));
+        int cntlstitem = apibc.get().getCntlstitem() +1 ;
+        int batch = apibc.get().getCntbtch();
+
+        Apibc apibcobj = apibc.get();
+        apibcobj.setAmtentr(amtentr);
+        apibcobj.setCntinvcent(cntitem);
+        apibcobj.setCntlstitem(cntlstitem);
+
+        return insertApibs(dto,cntitem,batch)&&insertApibh(dto,cntitem,batch)&&insertApibd(dto,cntitem,batch);
     }
     public Optional<Glbctl> checkJournalDuplicates(String desc){
         return glbctl_repo.findByBtchdescAndBatchstat(desc,"1");

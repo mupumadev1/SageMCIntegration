@@ -2,8 +2,10 @@ package com.sagemcintegration.service;
 
 import com.sagemcintegration.dto.requestDTO;
 import com.sagemcintegration.dto.responseDTO;
+import com.sagemcintegration.model.mssql.ic.ap.Apibc;
 import com.sagemcintegration.repository.mssql.hi.ap.HIApobl_repo;
 import com.sagemcintegration.repository.mssql.hi.ap.HIApven_repo;
+import com.sagemcintegration.repository.mssql.ic.ap.Apibc_repo;
 import com.sagemcintegration.repository.mssql.ic.ap.Apibh_repo;
 import com.sagemcintegration.repository.mssql.ic.ap.Apobl_repo;
 import com.sagemcintegration.repository.mssql.ic.ap.Apven_repo;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -100,21 +103,38 @@ public class TransactionProcessingService {
             return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Error processing transaction for HIService: " + e.getMessage());
         }
     }
-
+    private Apibc_repo apibc_repo;
     // Helper function to process Invoice and Credit Notes for Service
     private ResponseEntity<responseDTO> processInvoiceCreditNoteForService(requestDTO requestDTO) throws Exception {
-        if (apibh_repo.findByIdinvc(formatInvoiceNumber(requestDTO.getTransactionReference().trim())).isPresent()) {
-            return buildErrorResponse(HttpStatus.ALREADY_REPORTED, "Transaction could not be saved.");
+        String batchDescBase = "Materials Control Invoices ";
+        Date today = new Date();
+        String date = today.toString();
+        String batchDesc = batchDescBase + date;
+        Optional<Apibc> obj = apibc_repo.findByBtchdescContainingAndBtchstts(batchDescBase, (short) 1);
+        if (obj.isPresent()) {
+            if (apibh_repo.findByIdinvc(formatInvoiceNumber(requestDTO.getTransactionReference().trim())).isEmpty()) {
+                if (service.updateInvoice(requestDTO, obj)) {
+                    service.insertProcessedTransaction(requestDTO, getClientIp());
+                    return buildSuccessResponse("Request processed successfully.");
+                } else {
+                    throw new Exception("An Error saving the transaction has occurred.");
+                }
+            }
         } else {
-
-            if (service.createInvoice(requestDTO)) {
-                service.updateBatchNumber();
-                service.insertProcessedTransaction(requestDTO, getClientIp());
-                return buildSuccessResponse("Request processed successfully.");
+            if (apibh_repo.findByIdinvc(formatInvoiceNumber(requestDTO.getTransactionReference().trim())).isPresent()) {
+                return buildErrorResponse(HttpStatus.ALREADY_REPORTED, "Transaction could not be saved.");
             } else {
-                throw new Exception("An Error saving the transaction has occurred.");
+                int batch = service.getAPBatchNumber();
+                if (service.createInvoice(requestDTO, batchDesc,1,batch)) {
+                    service.updateBatchNumber();
+                    service.insertProcessedTransaction(requestDTO, getClientIp());
+                    return buildSuccessResponse("Request processed successfully.");
+                } else {
+                    throw new Exception("An Error saving the transaction has occurred.");
+                }
             }
         }
+        throw new Exception("An Error saving the transaction has occurred.");
     }
 
     // Helper function to process Stock Transactions for Service
