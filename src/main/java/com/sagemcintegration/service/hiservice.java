@@ -183,7 +183,7 @@ public class hiservice {
         Optional<Apven> obj = HIApven_repo.findByVendorid(invoiceDto.getCreditAccountId());
         return obj.isPresent();
     }
-    public boolean insertApibcHI(requestDTO invoiceDto) {
+    public boolean insertApibcHI(requestDTO invoiceDto,String batchdesc) {
         int batch = getAPBatchNumber();
         System.out.print(batch);
         Apibc apibc = Apibc.builder()
@@ -193,7 +193,7 @@ public class hiservice {
                 .audtuser("ADMIN")
                 .audtorg("HDIDAT")
                 .datebtch(Integer.parseInt(invoiceDto.getTransactionDate()))
-                .btchdesc(validateReference(invoiceDto.getTransactionDescription()))
+                .btchdesc(batchdesc)
                 .cntinvcent(1)
                 .amtentr(bigDecimalValue(invoiceDto.getDebitAmount()))
                 .btchtype((short) 2)
@@ -212,7 +212,7 @@ public class hiservice {
         return fetchedObj.isPresent();
     }
 
-    public boolean insertApibhHI(requestDTO invoiceDto) {
+    public boolean insertApibhHI(requestDTO invoiceDto, int cntitem, int batch) {
         Optional<Apven> obj = HIApven_repo.findByVendorid(invoiceDto.getCreditAccountId());
         String vendorId = obj.map(Apven::getVendorid).orElse(null);
         String vendorName = obj.map(Apven::getVendname).orElse(null);
@@ -220,12 +220,12 @@ public class hiservice {
         int year = getMonthYear()[1];
         String period = Integer.toString(month);
         String fiscyr = Integer.toString(year);
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
 
         Apibh apibh = Apibh.builder()
                 .apibhPK(ApibhPK.builder()
                         .cntbtch(batch)
-                        .cntitem(1)
+                        .cntitem(cntitem)
                         .build())
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
@@ -456,7 +456,7 @@ public class hiservice {
             return formattedInv;
         }
     }
-    public boolean insertApibhCrnHI(requestDTO invoiceDto) {
+    public boolean insertApibhCrnHI(requestDTO invoiceDto, int cntitem, int batch) {
         Optional<Apven> obj = HIApven_repo.findByVendorid(invoiceDto.getCreditAccountId());
         String vendorId = obj.map(Apven::getVendorid).orElse(null);
         String vendorName = obj.map(Apven::getVendname).orElse(null);
@@ -464,12 +464,12 @@ public class hiservice {
         int year = getMonthYear()[1];
         String period = Integer.toString(month);
         String fiscyr = Integer.toString(year);
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
 
         Apibh apibh = Apibh.builder()
                 .apibhPK(ApibhPK.builder()
                         .cntbtch(batch)
-                        .cntitem(1)
+                        .cntitem(cntitem)
                         .build())
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
@@ -684,15 +684,15 @@ public class hiservice {
 public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
         return HIGlbctl_repo.findByBtchdescAndBatchstat(desc,"1");
 }
-    public boolean insertApibdHI(requestDTO invoiceDto) {
-        int batch = getAPBatchNumber();
+    public boolean insertApibdHI(requestDTO invoiceDto, int cntitem, int batch) {
+        int batch1 = getAPBatchNumber();
         int cntline =20;
         for (infoDTO dto : invoiceDto.getDebits()) {
 
             Apibd apibd = Apibd.builder()
                     .apibdPK(ApibdPK.builder()
                             .cntbtch(batch)
-                            .cntitem(1)
+                            .cntitem(cntitem)
                             .cntline(cntline)
                             .build())
                     .audtdate(currentDate())
@@ -872,14 +872,14 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
         return date.replaceAll("\\-", "");
     }
 
-    public boolean insertApibsHI(requestDTO invoiceDto) {
+    public boolean insertApibsHI(requestDTO invoiceDto, int cntitem, int batch) {
 
-        int batch = getAPBatchNumber();
+        int batch1 = getAPBatchNumber();
         Apibs apibs = Apibs.builder()
                 .apibsPK(ApibsPK.builder()
                         .cntbtch(batch)
                         .cntpaym(1)
-                        .cntitem(1)
+                        .cntitem(cntitem)
                         .build())
                 .audtdate(currentDate())
                 .audttime(Integer.parseInt(currentTime()))
@@ -1358,11 +1358,20 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
         return true;
     }
 
-    public boolean createInvoice(requestDTO dto){
-        return insertApibcHI(dto)&&insertApibhHI(dto)&&insertApibdHI(dto)&&insertApibsHI(dto);
+    public boolean updateInvoice(requestDTO dto, Optional<Apibc> apibc){
+        int cntitem = apibc.get().getCntinvcent()+1;
+        BigDecimal amtentr = apibc.get().getAmtentr().add(bigDecimalValue(dto.getCreditAmount()));
+        int cntlstitem = apibc.get().getCntlstitem() +1 ;
+        int batch = apibc.get().getCntbtch();
+
+        Apibc apibcobj = apibc.get();
+        apibcobj.setAmtentr(amtentr);
+        apibcobj.setCntinvcent(cntitem);
+        apibcobj.setCntlstitem(cntlstitem);
+        return insertApibsHI(dto,cntitem,batch)&&insertApibhHI(dto,cntitem,batch)&&insertApibdHI(dto,cntitem,batch);
     }
-    public boolean updateInvoice(requestDTO dto){
-        return updateApibcHI(dto)&&updateApibdHI(dto)&&updateApibhHI(dto)&&updateApibsHI(dto);
+    public boolean createInvoice(requestDTO dto,String batchdesc,int cntitem,int batch) {
+        return insertApibcHI(dto,batchdesc)&&insertApibdHI(dto,cntitem,batch)&&insertApibhHI(dto,cntitem,batch)&&insertApibsHI(dto,cntitem,batch);
     }
     public String[] generateTransactionNumber(int num) {
         int num1 = (num - 1) * 40 + 20;
