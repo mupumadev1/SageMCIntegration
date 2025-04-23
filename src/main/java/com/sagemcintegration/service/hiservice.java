@@ -232,7 +232,7 @@ public class hiservice {
                 .audtuser("ADMIN")
                 .audtorg("HDIDAT")
                 .idvend(vendorId)
-                .idinvc(formatInvoiceNumber(invoiceDto.getTransactionReference()))
+                .idinvc(invoiceDto.getTransactionReference())
                 .idrmitto("")
                 .texttrx((short) 1)
                 .idtrx((short) 12)
@@ -374,7 +374,7 @@ public class hiservice {
                 .raterc(BigDecimal.valueOf(1))
                 .ratetyperc("")
                 .ratedaterc(0)
-                .rateoprc((short) 0)
+                .rateoprc((short) 1)
                 .swraterc((short) 0)
                 .txamt1Rc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
                 .txamt2Rc(BigDecimal.valueOf(0))
@@ -476,7 +476,7 @@ public class hiservice {
                 .audtuser("ADMIN")
                 .audtorg("HDIDAT")
                 .idvend(vendorId)
-                .idinvc(formatInvoiceNumberCrn(invoiceDto.getTransactionReference()))
+                .idinvc(invoiceDto.getTransactionReference())
                 .idrmitto("")
                 .texttrx((short) 3)
                 .idtrx((short) 32)
@@ -618,7 +618,7 @@ public class hiservice {
                 .raterc(BigDecimal.valueOf(1))
                 .ratetyperc("")
                 .ratedaterc(0)
-                .rateoprc((short) 0)
+                .rateoprc((short) 1)
                 .swraterc((short) 0)
                 .txamt1Rc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
                 .txamt2Rc(BigDecimal.valueOf(0))
@@ -1363,11 +1363,19 @@ public Optional<Glbctl> checkJournalDuplicatesHi(String desc){
         BigDecimal amtentr = apibc.get().getAmtentr().add(bigDecimalValue(dto.getCreditAmount()));
         int cntlstitem = apibc.get().getCntlstitem() +1 ;
         int batch = apibc.get().getCntbtch();
+        String batchDescBase = "Materials Control Invoices ";
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy");
+        Date today = new Date();
+        String date = sdf.format(today);
+        String batchDesc = batchDescBase + date;
 
         Apibc apibcobj = apibc.get();
         apibcobj.setAmtentr(amtentr);
         apibcobj.setCntinvcent(cntitem);
         apibcobj.setCntlstitem(cntlstitem);
+        apibcobj.setDatebtch(currentDate());
+        apibcobj.setBtchdesc(batchDesc);
+
         return insertApibsHI(dto,cntitem,batch)&&insertApibhHI(dto,cntitem,batch)&&insertApibdHI(dto,cntitem,batch);
     }
     public boolean createInvoice(requestDTO dto,String batchdesc,int cntitem,int batch) {

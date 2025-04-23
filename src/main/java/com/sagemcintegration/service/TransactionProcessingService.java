@@ -12,12 +12,16 @@ import com.sagemcintegration.repository.mssql.ic.ap.Apibh_repo;
 import com.sagemcintegration.repository.mssql.ic.ap.Apobl_repo;
 import com.sagemcintegration.repository.mssql.ic.ap.Apven_repo;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
@@ -50,7 +54,9 @@ public class TransactionProcessingService {
             if (service.findByAccountId(requestDTO)) {
                 return processTransactionForService(requestDTO);
             } else if (hiService.findByAccountIdHI(requestDTO)) {
-                return processTransactionForHIService(requestDTO);
+                return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Invalid Account ID");
+
+                //return processTransactionForHIService(requestDTO);
             } else {
                 return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Invalid Account ID");
             }
@@ -71,14 +77,16 @@ public class TransactionProcessingService {
                 // Helper function to process Invoice and Credit Notes for Service
                 return processInvoiceCreditNoteForService(requestDTO);
             } else {
+                return buildErrorResponse(HttpStatus.EXPECTATION_FAILED, "Error processing transaction for Service: ");
+
                 // Helper function to process Stock Transactions for Service
-                if(service.findGLAccountId(requestDTO)) {
+                /*if(service.findGLAccountId(requestDTO)) {
                     return processStockTransactionForService(requestDTO);
                 }
                 else{
                     return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Error processing transaction GL account not found");
 
-                }
+                }*/
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -98,23 +106,28 @@ public class TransactionProcessingService {
                 return processInvoiceCreditNoteForHIService(requestDTO);
             } else {
                 // Helper function to process Stock Transactions for HIService
-                return processStockTransactionForHIService(requestDTO);
+               // return processStockTransactionForHIService(requestDTO);
+                return buildErrorResponse(HttpStatus.EXPECTATION_FAILED, "Error processing transaction for Service: ");
+
             }
         } catch (Exception e) {
             e.printStackTrace();
             return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Error processing transaction for HIService: " + e.getMessage());
         }
     }
+    @Autowired
     private Apibc_repo apibc_repo;
     // Helper function to process Invoice and Credit Notes for Service
-    private ResponseEntity<responseDTO> processInvoiceCreditNoteForService(requestDTO requestDTO) throws Exception {
+ /*   private ResponseEntity<responseDTO> processInvoiceCreditNoteForService(requestDTO requestDTO) throws Exception {
+        System.out.println(requestDTO);
         String batchDescBase = "Materials Control Invoices ";
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy");
         Date today = new Date();
-        String date = today.toString();
+        String date = sdf.format(today);
         String batchDesc = batchDescBase + date;
         Optional<Apibc> obj = apibc_repo.findByBtchdescContainingAndBtchstts(batchDescBase, (short) 1);
         if (obj.isPresent()) {
-            if (apibh_repo.findByIdinvc(formatInvoiceNumber(requestDTO.getTransactionReference().trim())).isEmpty()) {
+            if (apibh_repo.findByIdinvcContaining(requestDTO.getTransactionReference().trim()).isEmpty()) {
                 if (service.updateInvoice(requestDTO, obj)) {
                     service.insertProcessedTransaction(requestDTO, getClientIp());
                     return buildSuccessResponse("Request processed successfully.");
@@ -123,7 +136,7 @@ public class TransactionProcessingService {
                 }
             }
         } else {
-            if (apibh_repo.findByIdinvc(formatInvoiceNumber(requestDTO.getTransactionReference().trim())).isEmpty()) {
+            if (apibh_repo.findByIdinvcContaining(requestDTO.getTransactionReference().trim()).isEmpty()) {
 
                 int batch = service.getAPBatchNumber();
                 if (service.createInvoice(requestDTO, batchDesc,1,batch)) {
@@ -135,51 +148,67 @@ public class TransactionProcessingService {
                 }
             }
         }
-        throw new Exception("An Error saving the transaction has occurred.");
+        throw new Exception("An Error saving the tra" +
+                "nsaction has occurred.");
     }
-
+*/
     // Helper function to process Stock Transactions for Service
-    private ResponseEntity<responseDTO> processStockTransactionForService(requestDTO requestDTO) throws Exception {
-        String batchdesc = "Materials Control Entries for-" + requestDTO.getTransactionDate();
-        Integer batchInt = service.getBatchID();
-        String batch = String.valueOf(batchInt);
-        Optional<com.sagemcintegration.model.mssql.ic.gl.Glbctl> glObj = service.checkJournalDuplicates(batchdesc);
-        if (glObj.isPresent()){
-            if (!service.checkJournalDetailsDuplicates(requestDTO.getTransactionReference())){
-                com.sagemcintegration.model.mssql.ic.gl.Glbctl obj = glObj.get();
-                String nextBtchEntry = service.getBatchNextEntry(obj.getBatchid());
-                service.updateGlbctl(obj,requestDTO);
-                service.insertGljeh(requestDTO,obj.getBatchid(),nextBtchEntry);
-                service.insertGljed(requestDTO,obj.getBatchid(),nextBtchEntry);
-            }
-            else{
-                return buildErrorResponse(HttpStatus.ALREADY_REPORTED, "Transaction could not be saved.");
-            }
+    private static final Logger log = LoggerFactory.getLogger(service.class);
+    private ResponseEntity<responseDTO> processInvoiceCreditNoteForService(requestDTO requestDTO) throws Exception {
+        // Replace System.out with proper logging
+        log.info("Processing invoice request: {}", requestDTO);
 
+        // Extract constants and improve variable naming
+        final String BATCH_DESC_BASE = "Materials Control Invoices ";
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
+        String formattedDate = dateFormat.format(new Date());
+        String batchDesc = BATCH_DESC_BASE + formattedDate;
+
+        // Trim transaction reference once
+        String transactionRef = requestDTO.getTransactionReference().trim();
+
+        // Check if transaction already exists - extracted to reuse
+        boolean transactionExists = !apibh_repo.findByIdinvcContainingAndDateinvc(transactionRef,Integer.parseInt(requestDTO.getTransactionDate().replace("-", ""))).isEmpty();
+        if (transactionExists) {
+            throw new Exception("Transaction has already been processed: " + transactionRef);
         }
-        else{
-        if (service.insertGjbctl(requestDTO, batch, batchdesc) && service.insertGljeh(requestDTO, batch, "00001") && service.insertGljed(requestDTO, batch,"00001")) {
-            service.updateNextBatchNo(batch);
-            service.insertProcessedTransaction(requestDTO, getClientIp());
-            return buildSuccessResponse("Request processed successfully.");
+
+        Optional<Apibc> existingBatch = apibc_repo.findByBtchdescContainingAndBtchstts(BATCH_DESC_BASE, (short) 1);
+
+        if (existingBatch.isPresent()) {
+            // Process with existing batch
+            if (service.updateInvoice(requestDTO, existingBatch)) {
+                service.insertProcessedTransaction(requestDTO, getClientIp());
+                return buildSuccessResponse("Request processed successfully.");
+            } else {
+                throw new Exception("An error occurred saving the transaction.");
+            }
         } else {
-            throw new Exception("An Error saving the transaction has occurred.");
+            // Process with new batch
+            int batch = service.getAPBatchNumber();
+            if (service.createInvoice(requestDTO, batchDesc, 1, batch)) {
+                service.updateBatchNumber();
+                service.insertProcessedTransaction(requestDTO, getClientIp());
+                return buildSuccessResponse("Request processed successfully.");
+            } else {
+                throw new Exception("An error occurred saving the transaction.");
+            }
         }
-        }
-        return buildErrorResponse(HttpStatus.EXPECTATION_FAILED, "Transaction could not be saved.");
-
     }
+    @Autowired
 private HIApibc_repo hiApibc_repo;
+    @Autowired
 private HIApibh_repo hiApibh_repo;
     // Helper function to process Invoice and Credit Notes for HIService
-    private ResponseEntity<responseDTO> processInvoiceCreditNoteForHIService(requestDTO requestDTO) throws Exception {
+   private ResponseEntity<responseDTO> processInvoiceCreditNoteForHIService(requestDTO requestDTO) throws Exception {
         String batchDescBase = "Materials Control Invoices ";
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy");
         Date today = new Date();
-        String date = today.toString();
+        String date = sdf.format(today);
         String batchDesc = batchDescBase + date;
         Optional<com.sagemcintegration.model.mssql.hi.ap.Apibc> obj = hiApibc_repo.findByBtchdescContainingAndBtchstts(batchDescBase, (short) 1);
         if (obj.isPresent()) {
-            if (hiApibh_repo.findByIdinvc(requestDTO.getTransactionReference().trim()).isEmpty()) {
+            if (hiApibh_repo.findByIdinvcContainingAndDateinvc(requestDTO.getTransactionReference().trim(),Integer.parseInt(requestDTO.getTransactionDate().replace("-", ""))).isEmpty()) {
                 if (hiService.updateInvoice(requestDTO,obj)) {
                     service.insertProcessedTransaction(requestDTO, getClientIp());
                     return buildSuccessResponse("Request processed successfully.");
@@ -189,7 +218,7 @@ private HIApibh_repo hiApibh_repo;
             }
         }
         else{
-            if (hiApibh_repo.findByIdinvc(requestDTO.getTransactionReference().trim()).isEmpty()) {
+            if (hiApibh_repo.findByIdinvcContainingAndDateinvc(requestDTO.getTransactionReference().trim(),Integer.parseInt(requestDTO.getTransactionDate().replace("-", ""))).isEmpty()) {
                 int batch = hiService.getBatchID();
                 if (hiService.createInvoice(requestDTO, batchDesc,1,batch)) {
                     hiService.updateBatchNumberHI();

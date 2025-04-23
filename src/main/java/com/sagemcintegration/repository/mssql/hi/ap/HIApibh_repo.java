@@ -8,5 +8,5 @@ import java.util.Optional;
 
 public interface HIApibh_repo extends JpaRepository<Apibh, ApibhPK> {
 
-    Optional<Apibh> findByIdinvc(String idinvc);
+    Optional<Apibh> findByIdinvcContainingAndDateinvc(String idinvc,int Date);
 }

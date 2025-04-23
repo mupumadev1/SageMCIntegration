@@ -278,7 +278,7 @@ public class service {
                 .audtuser("ADMIN")
                 .audtorg("ICLDAT")
                 .idvend(vendorId)
-                .idinvc(formatInvoiceNumber(invoiceDto.getTransactionReference()))
+                .idinvc(invoiceDto.getTransactionReference())
                 .idrmitto("")
                 .texttrx( texttrx)
                 .idtrx(idtrx)
@@ -420,7 +420,7 @@ public class service {
                 .raterc(BigDecimal.valueOf(1))
                 .ratetyperc("")
                 .ratedaterc(0)
-                .rateoprc((short) 0)
+                .rateoprc((short) 1)
                 .swraterc((short) 0)
                 .txamt1Rc(bigDecimalValue(invoiceDto.getCreditTaxAmount()))
                 .txamt2Rc(BigDecimal.valueOf(0))
@@ -506,7 +506,7 @@ public class service {
                 .audtuser("ADMIN")
                 .audtorg("ICLDAT")
                 .idvend(vendorId)
-                .idinvc(formatInvoiceNumberCrn(invoiceDto.getTransactionReference()))
+                .idinvc(invoiceDto.getTransactionReference())
                 .idrmitto("")
                 .texttrx( texttrx)
                 .idtrx(idtrx)
@@ -1565,11 +1565,18 @@ public class service {
         BigDecimal amtentr = apibc.get().getAmtentr().add(bigDecimalValue(dto.getCreditAmount()));
         int cntlstitem = apibc.get().getCntlstitem() +1 ;
         int batch = apibc.get().getCntbtch();
+        String batchDescBase = "Materials Control Invoices ";
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy");
+        Date today = new Date();
+        String date = sdf.format(today);
+        String batchDesc = batchDescBase + date;
 
         Apibc apibcobj = apibc.get();
         apibcobj.setAmtentr(amtentr);
         apibcobj.setCntinvcent(cntitem);
         apibcobj.setCntlstitem(cntlstitem);
+        apibcobj.setDatebtch(currentDate());
+        apibcobj.setBtchdesc(batchDesc);
 
         return insertApibs(dto,cntitem,batch)&&insertApibh(dto,cntitem,batch)&&insertApibd(dto,cntitem,batch);
     }
