@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -154,6 +156,10 @@ public class TransactionProcessingService {
 */
     // Helper function to process Stock Transactions for Service
     private static final Logger log = LoggerFactory.getLogger(service.class);
+    public BigDecimal bigDecimalValue(String amt) {
+        double doubleValue = Double.parseDouble(amt);
+        return BigDecimal.valueOf(doubleValue).setScale(2, RoundingMode.HALF_UP).abs();
+    }
     private ResponseEntity<responseDTO> processInvoiceCreditNoteForService(requestDTO requestDTO) throws Exception {
         // Replace System.out with proper logging
         log.info("Processing invoice request: {}", requestDTO);
@@ -168,8 +174,9 @@ public class TransactionProcessingService {
         String transactionRef = requestDTO.getTransactionReference().trim();
 
         // Check if transaction already exists - extracted to reuse
-        boolean transactionExists = !apibh_repo.findByIdinvcContainingAndDateinvc(transactionRef,Integer.parseInt(requestDTO.getTransactionDate().replace("-", ""))).isEmpty();
+        boolean transactionExists = apibh_repo.findByIdinvcContainingAndDateinvcAndAmtgrosdst(transactionRef,Integer.parseInt(requestDTO.getTransactionDate().replace("-", "")),bigDecimalValue(requestDTO.getCreditAmount())).isPresent();
         if (transactionExists) {
+
             throw new Exception("Transaction has already been processed: " + transactionRef);
         }
 

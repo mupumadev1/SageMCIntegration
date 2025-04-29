@@ -196,7 +196,7 @@ public class hiservice {
                 .btchdesc(batchdesc)
                 .cntinvcent(1)
                 .amtentr(bigDecimalValue(invoiceDto.getDebitAmount()))
-                .btchtype((short) 2)
+                .btchtype((short) 1)
                 .btchstts((short) 1)
                 .invctype((short) 1)
                 .cntlstitem(1)
