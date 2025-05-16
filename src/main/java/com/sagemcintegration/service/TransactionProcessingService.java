@@ -165,9 +165,10 @@ public class TransactionProcessingService {
         log.info("Processing invoice request: {}", requestDTO);
 
         // Extract constants and improve variable naming
-        final String BATCH_DESC_BASE = "Materials Control Invoices ";
+
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
-        String formattedDate = dateFormat.format(new Date());
+        String formattedDate = dateFormat.format(requestDTO.getTransactionDate());
+        final String BATCH_DESC_BASE = "Materials Control Invoices " + formattedDate;
         String batchDesc = BATCH_DESC_BASE + formattedDate;
 
         // Trim transaction reference once
@@ -215,7 +216,7 @@ private HIApibh_repo hiApibh_repo;
         String batchDesc = batchDescBase + date;
         Optional<com.sagemcintegration.model.mssql.hi.ap.Apibc> obj = hiApibc_repo.findByBtchdescContainingAndBtchstts(batchDescBase, (short) 1);
         if (obj.isPresent()) {
-            if (hiApibh_repo.findByIdinvcContainingAndDateinvc(requestDTO.getTransactionReference().trim(),Integer.parseInt(requestDTO.getTransactionDate().replace("-", ""))).isEmpty()) {
+            if (hiApibh_repo.findByIdinvcContainingAndDateinvcAndAmtgrosdst(requestDTO.getTransactionReference().trim(),Integer.parseInt(requestDTO.getTransactionDate().replace("-", "")),bigDecimalValue(requestDTO.getCreditAmount())).isEmpty()) {
                 if (hiService.updateInvoice(requestDTO,obj)) {
                     service.insertProcessedTransaction(requestDTO, getClientIp());
                     return buildSuccessResponse("Request processed successfully.");
@@ -225,7 +226,7 @@ private HIApibh_repo hiApibh_repo;
             }
         }
         else{
-            if (hiApibh_repo.findByIdinvcContainingAndDateinvc(requestDTO.getTransactionReference().trim(),Integer.parseInt(requestDTO.getTransactionDate().replace("-", ""))).isEmpty()) {
+            if (hiApibh_repo.findByIdinvcContainingAndDateinvcAndAmtgrosdst(requestDTO.getTransactionReference().trim(),Integer.parseInt(requestDTO.getTransactionDate().replace("-", "")),bigDecimalValue(requestDTO.getCreditAmount())).isEmpty()) {
                 int batch = hiService.getBatchID();
                 if (hiService.createInvoice(requestDTO, batchDesc,1,batch)) {
                     hiService.updateBatchNumberHI();
