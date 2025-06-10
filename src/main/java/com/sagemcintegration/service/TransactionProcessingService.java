@@ -26,7 +26,9 @@ import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -161,44 +163,89 @@ public class TransactionProcessingService {
         return BigDecimal.valueOf(doubleValue).setScale(2, RoundingMode.HALF_UP).abs();
     }
     private ResponseEntity<responseDTO> processInvoiceCreditNoteForService(requestDTO requestDTO) throws Exception {
-        // Replace System.out with proper logging
         log.info("Processing invoice request: {}", requestDTO);
 
-        // Extract constants and improve variable naming
+        // Validate input
+        if (requestDTO.getTransactionDate() == null || requestDTO.getTransactionDate().trim().isEmpty()) {
+            throw new IllegalArgumentException("Transaction date cannot be null or empty");
+        }
 
-        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
-        String formattedDate = dateFormat.format(requestDTO.getTransactionDate());
-        final String BATCH_DESC_BASE = "Materials Control Invoices " + formattedDate;
-        String batchDesc = BATCH_DESC_BASE + formattedDate;
+        if (requestDTO.getTransactionReference() == null || requestDTO.getTransactionReference().trim().isEmpty()) {
+            throw new IllegalArgumentException("Transaction reference cannot be null or empty");
+        }
+
+        // Parse and format the date string
+        String formattedDate;
+        int dateAsInteger;
+        try {
+            // Assuming input date is in format "yyyy-MM-dd" or similar
+            DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"); // Adjust based on your actual input format
+            LocalDate date = LocalDate.parse(requestDTO.getTransactionDate().trim(), inputFormatter);
+
+            DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+            formattedDate = date.format(outputFormatter);
+
+            // Convert to integer format for database query (yyyyMMdd)
+            DateTimeFormatter intFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+            dateAsInteger = Integer.parseInt(date.format(intFormatter));
+
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse transaction date: {}", requestDTO.getTransactionDate(), e);
+            throw new IllegalArgumentException("Invalid date format. Expected format: yyyy-MM-dd", e);
+        }
+
+        // Create batch description - this should be the COMPLETE description used for both search and creation
+        final String COMPLETE_BATCH_DESC = "Materials Control Invoices " + formattedDate;
 
         // Trim transaction reference once
         String transactionRef = requestDTO.getTransactionReference().trim();
 
-        // Check if transaction already exists - extracted to reuse
-        boolean transactionExists = apibh_repo.findByIdinvcContainingAndDateinvcAndAmtgrosdst(transactionRef,Integer.parseInt(requestDTO.getTransactionDate().replace("-", "")),bigDecimalValue(requestDTO.getCreditAmount())).isPresent();
-        if (transactionExists) {
+        // Validate credit amount
+        BigDecimal creditAmount;
+        try {
+            creditAmount = bigDecimalValue(requestDTO.getCreditAmount());
+        } catch (Exception e) {
+            log.error("Failed to parse credit amount: {}", requestDTO.getCreditAmount(), e);
+            throw new IllegalArgumentException("Invalid credit amount format", e);
+        }
 
+        // Check if transaction already exists
+        boolean transactionExists = apibh_repo.findByIdinvcContainingAndDateinvcAndAmtgrosdst(
+                transactionRef,
+                dateAsInteger,
+                creditAmount
+        ).isPresent();
+
+        if (transactionExists) {
+            log.warn("Transaction already exists: {}", transactionRef);
             throw new Exception("Transaction has already been processed: " + transactionRef);
         }
 
-        Optional<Apibc> existingBatch = apibc_repo.findByBtchdescContainingAndBtchstts(BATCH_DESC_BASE, (short) 1);
+        // Check for existing batch using the EXACT batch description
+        Optional<Apibc> existingBatch = apibc_repo.findByBtchdescContainingAndBtchstts(COMPLETE_BATCH_DESC, (short) 1);
 
         if (existingBatch.isPresent()) {
+            log.info("Processing with existing batch: {}", COMPLETE_BATCH_DESC);
             // Process with existing batch
             if (service.updateInvoice(requestDTO, existingBatch)) {
                 service.insertProcessedTransaction(requestDTO, getClientIp());
+                log.info("Successfully processed transaction with existing batch: {}", transactionRef);
                 return buildSuccessResponse("Request processed successfully.");
             } else {
+                log.error("Failed to update invoice for transaction: {}", transactionRef);
                 throw new Exception("An error occurred saving the transaction.");
             }
         } else {
+            log.info("Creating new batch: {}", COMPLETE_BATCH_DESC);
             // Process with new batch
             int batch = service.getAPBatchNumber();
-            if (service.createInvoice(requestDTO, batchDesc, 1, batch)) {
+            if (service.createInvoice(requestDTO, COMPLETE_BATCH_DESC, 1, batch)) {
                 service.updateBatchNumber();
                 service.insertProcessedTransaction(requestDTO, getClientIp());
+                log.info("Successfully processed transaction with new batch: {}", transactionRef);
                 return buildSuccessResponse("Request processed successfully.");
             } else {
+                log.error("Failed to create invoice for transaction: {}", transactionRef);
                 throw new Exception("An error occurred saving the transaction.");
             }
         }

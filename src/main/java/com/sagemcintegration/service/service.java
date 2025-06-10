@@ -1149,7 +1149,6 @@ public class service {
         apibcobj.setCntinvcent(cntitem);
         apibcobj.setCntlstitem(cntlstitem);
         apibcobj.setDatebtch(currentDate());
-        apibcobj.setBtchdesc(batchDesc);
 
         return insertApibs(dto,cntitem,batch)&&insertApibh(dto,cntitem,batch)&&insertApibd(dto,cntitem,batch);
     }

@@ -58,7 +58,7 @@ public class SQLServerWebConfig {
     private Properties getJpaProperties() {
         Properties props = new Properties();
         props.put("hibernate.dialect", "org.hibernate.dialect.SQLServerDialect");
-        props.put("hibernate.show_sql", "true");
+        props.put("hibernate.show_sql", "false");
         props.put("hibernate.format_sql", "true");
         return props;
     }
