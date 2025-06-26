@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface Apibc_repo extends JpaRepository<Apibc,Integer> {
-    Optional<Apibc> findByBtchdescContainingAndBtchstts(String btchdesc, short btchstts);
-    Optional<Apibc> findByBtchdescAndBtchstts(String btchdesc, short btchstts);
+    List<Apibc> findByBtchdescContainingAndBtchsttsIn(String btchdesc, List<Short> btchstts);
+    // Add these methods to your Apibc repository
     List<Apibc> findByBtchdescContaining(String btchdesc);
 }

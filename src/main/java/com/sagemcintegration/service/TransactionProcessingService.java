@@ -1,8 +1,10 @@
 package com.sagemcintegration.service;
 
+import com.sagemcintegration.dto.infoDTO;
 import com.sagemcintegration.dto.requestDTO;
 import com.sagemcintegration.dto.responseDTO;
 import com.sagemcintegration.model.mssql.ic.ap.Apibc;
+import com.sagemcintegration.model.mssql.ic.ap.Apibh;
 import com.sagemcintegration.repository.mssql.hi.ap.HIApibc_repo;
 import com.sagemcintegration.repository.mssql.hi.ap.HIApibh_repo;
 import com.sagemcintegration.repository.mssql.hi.ap.HIApobl_repo;
@@ -27,10 +29,7 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 public class TransactionProcessingService {
@@ -180,14 +179,15 @@ public class TransactionProcessingService {
         try {
             // Assuming input date is in format "yyyy-MM-dd" or similar
             DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"); // Adjust based on your actual input format
-            LocalDate date = LocalDate.parse(requestDTO.getTransactionDate().trim(), inputFormatter);
+            LocalDate date = LocalDate.parse(requestDTO.getPostedDate().trim(), inputFormatter);
 
             DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
             formattedDate = date.format(outputFormatter);
 
             // Convert to integer format for database query (yyyyMMdd)
+            LocalDate transactionDate = LocalDate.parse(requestDTO.getTransactionDate().trim(), inputFormatter);
             DateTimeFormatter intFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-            dateAsInteger = Integer.parseInt(date.format(intFormatter));
+            dateAsInteger = Integer.parseInt(transactionDate.format(intFormatter));
 
         } catch (DateTimeParseException e) {
             log.error("Failed to parse transaction date: {}", requestDTO.getTransactionDate(), e);
@@ -199,35 +199,65 @@ public class TransactionProcessingService {
 
         // Trim transaction reference once
         String transactionRef = requestDTO.getTransactionReference().trim();
+        boolean isCreditNote = isCreditNote(requestDTO); // You'll need to implement this logic
+        String vendorId;
 
-        // Validate credit amount
-        BigDecimal creditAmount;
-        try {
-            creditAmount = bigDecimalValue(requestDTO.getCreditAmount());
-        } catch (Exception e) {
-            log.error("Failed to parse credit amount: {}", requestDTO.getCreditAmount(), e);
-            throw new IllegalArgumentException("Invalid credit amount format", e);
+        if (isCreditNote) {
+            // For credit notes, the vendor is debited, so look in the debits array
+            vendorId = extractVendorFromDebits(requestDTO);
+            log.info("Processing credit note - vendor found in debits: {}", vendorId);
+        } else {
+            // For regular invoices, the vendor is credited
+            vendorId = requestDTO.getCreditAccountId();
+            log.info("Processing regular invoice - vendor from creditAccountId: {}", vendorId);
         }
 
-        // Check if transaction already exists
-        boolean transactionExists = apibh_repo.findByIdinvcContainingAndDateinvcAndAmtgrosdst(
-                transactionRef,
-                dateAsInteger,
-                creditAmount
-        ).isPresent();
-
-        if (transactionExists) {
-            log.warn("Transaction already exists: {}", transactionRef);
-            throw new Exception("Transaction has already been processed: " + transactionRef);
+        if (vendorId == null || vendorId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Vendor ID not found in transaction");
         }
 
-        // Check for existing batch using the EXACT batch description
-        Optional<Apibc> existingBatch = apibc_repo.findByBtchdescContainingAndBtchstts(COMPLETE_BATCH_DESC, (short) 1);
+        vendorId = vendorId.trim();
 
-        if (existingBatch.isPresent()) {
-            log.info("Processing with existing batch: {}", COMPLETE_BATCH_DESC);
-            // Process with existing batch
-            if (service.updateInvoice(requestDTO, existingBatch)) {
+        log.info("Checking for existing transaction with invoice: {} and vendor: {}", transactionRef, vendorId);
+
+        // Check if transaction already exists using invoice ID and vendor ID only
+        // This prevents duplicates regardless of amount changes
+        List<Apibh> existingTransactions = apibh_repo.findByIdInvcAndIdVend(transactionRef, vendorId);
+
+        if (!existingTransactions.isEmpty()) {
+            log.warn("Transaction already exists: {} with vendor: {}", transactionRef, vendorId);
+            throw new Exception("Transaction has already been processed: " + transactionRef + " for vendor: " + vendorId);
+        }
+
+        // Rest of your existing batch processing logic remains the same...
+        List<Short> updatableStatuses = Arrays.asList((short)1, (short)7);
+        List<Apibc> updatableBatches = apibc_repo.findByBtchdescContainingAndBtchsttsIn(COMPLETE_BATCH_DESC, updatableStatuses);
+
+        // Check if Posted (3) or Deleted (4) batches exist (to do nothing)
+        List<Short> nonUpdatableStatuses = Arrays.asList((short)3, (short)4);
+        List<Apibc> nonUpdatableBatches = apibc_repo.findByBtchdescContainingAndBtchsttsIn(COMPLETE_BATCH_DESC, nonUpdatableStatuses);
+
+        // Check for Post In Progress batches separately
+        List<Short> postInProgressStatus = Arrays.asList((short)5);
+        List<Apibc> postInProgressBatches = apibc_repo.findByBtchdescContainingAndBtchsttsIn(COMPLETE_BATCH_DESC, postInProgressStatus);
+
+        if (!updatableBatches.isEmpty()) {
+            // If multiple updatable batches exist, use the newest one
+            Apibc existingBatch;
+            if (updatableBatches.size() > 1) {
+                log.warn("Multiple updatable batches found for {}, selecting the newest one", COMPLETE_BATCH_DESC);
+                // Assuming you have a creation date/time field to determine "newest"
+                // Replace getBtchcrtdt() with your actual date field name
+                existingBatch = updatableBatches.stream()
+                        .max(Comparator.comparing(Apibc::getDatebtch)) // Replace with your actual date field
+                        .orElse(updatableBatches.get(0));
+            } else {
+                existingBatch = updatableBatches.get(0);
+            }
+
+            log.info("Processing with existing updatable batch: {} with status: {}", COMPLETE_BATCH_DESC, existingBatch.getBtchstts());
+
+            if (service.updateInvoice(requestDTO, Optional.of(existingBatch))) {
                 service.insertProcessedTransaction(requestDTO, getClientIp());
                 log.info("Successfully processed transaction with existing batch: {}", transactionRef);
                 return buildSuccessResponse("Request processed successfully.");
@@ -235,9 +265,27 @@ public class TransactionProcessingService {
                 log.error("Failed to update invoice for transaction: {}", transactionRef);
                 throw new Exception("An error occurred saving the transaction.");
             }
+        } else if (!nonUpdatableBatches.isEmpty()) {
+
+            // Batch exists but is Posted or Deleted - do nothing
+            log.info("Batch exists but is in non-updatable status (Posted/Deleted): {}", COMPLETE_BATCH_DESC);
+            return buildSuccessResponse("Batch exists but cannot be updated due to its status.");
+        } else if (!postInProgressBatches.isEmpty()) {
+            // Post In Progress batches exist - create new batch (treat like no batch exists)
+            log.info("Batch exists but is Post In Progress - creating new batch: {}", COMPLETE_BATCH_DESC);
+            int batch = service.getAPBatchNumber();
+            if (service.createInvoice(requestDTO, COMPLETE_BATCH_DESC, 1, batch)) {
+                service.updateBatchNumber();
+                service.insertProcessedTransaction(requestDTO, getClientIp());
+                log.info("Successfully processed transaction with new batch (Post In Progress existed): {}", transactionRef);
+                return buildSuccessResponse("Request processed successfully.");
+            } else {
+                log.error("Failed to create invoice for transaction: {}", transactionRef);
+                throw new Exception("An error occurred saving the transaction.");
+            }
         } else {
+            // No batch exists - create new one
             log.info("Creating new batch: {}", COMPLETE_BATCH_DESC);
-            // Process with new batch
             int batch = service.getAPBatchNumber();
             if (service.createInvoice(requestDTO, COMPLETE_BATCH_DESC, 1, batch)) {
                 service.updateBatchNumber();
@@ -249,6 +297,69 @@ public class TransactionProcessingService {
                 throw new Exception("An error occurred saving the transaction.");
             }
         }
+    }
+    private String getNextAvailableBatchDescription(String baseBatchDesc) {
+        // First, try the base description without any suffix
+        if (!batchDescriptionExists(baseBatchDesc)) {
+            return baseBatchDesc;
+        }
+
+        // If base description exists, find the next available number
+        int sequenceNumber = 1;
+        String candidateDesc;
+
+        do {
+            candidateDesc = baseBatchDesc + " (" + sequenceNumber + ")";
+            sequenceNumber++;
+        } while (batchDescriptionExists(candidateDesc));
+
+        return candidateDesc;
+    }
+
+    // Helper method to check if a batch description already exists
+    private boolean batchDescriptionExists(String batchDesc) {
+        // Check if any batch with this exact description exists (regardless of status)
+        List<Apibc> existingBatches = apibc_repo.findByBtchdescContaining(batchDesc);
+        return !existingBatches.isEmpty();
+    }
+    private boolean isCreditNote(requestDTO requestDTO) {
+
+        // Or check if credit amount is negative
+        if (Float.parseFloat(requestDTO.getCreditAmount() )< 0.0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // Helper method to extract vendor ID from debits array
+    private String extractVendorFromDebits(requestDTO requestDTO) {
+        if (requestDTO.getDebits() == null || requestDTO.getDebits().isEmpty()) {
+            return null;
+        }
+
+        // Look for vendor account in debits
+        // You might need to identify vendor accounts by pattern or lookup
+        for (infoDTO debit : requestDTO.getDebits()) {
+            String accountId = debit.getAccountId();
+            if (isVendorAccount(accountId)) {
+                return accountId;
+            }
+        }
+
+        return null;
+    }
+
+    // Helper method to identify if an account is a vendor account
+    private boolean isVendorAccount(String accountId) {
+
+        if (accountId != null) {
+            return true;
+        }
+
+
+
+        return false;
     }
     @Autowired
 private HIApibc_repo hiApibc_repo;

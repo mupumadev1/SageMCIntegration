@@ -33,6 +33,16 @@ public class requestDTO {
 
     private String transactionDate;
 
+    public String getPostedDate() {
+        return postedDate;
+    }
+
+    public void setPostedDate(String postedDate) {
+        this.postedDate = postedDate;
+    }
+
+    private String postedDate;
+
     public void setCreditAmount(String creditAmountStr) {
         BigDecimal creditAmount = new BigDecimal(creditAmountStr);
         if (creditAmount.compareTo(BigDecimal.ZERO) < 0) {
